@@ -261,6 +261,12 @@
                     <label for="sales-vendor-id" class="block text-sm font-medium text-gray-700 mb-1">Vendor <span class="text-red-500">*</span></label>
                     <select id="sales-vendor-id" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"></select>
                 </div>
+
+                <!-- Delivery Select (NEW) -->
+                <div>
+                    <label for="sales-delivery-id" class="block text-sm font-medium text-gray-700 mb-1">Delivery <span class="text-red-500">*</span></label>
+                    <select id="sales-delivery-id" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"></select>
+                </div>
             </div>
 
             <!-- Upload Buttons (NEW) -->
@@ -973,6 +979,24 @@
     }).getVendorsForForm();
   }
 
+  // New: Delivery dropdown logic
+  /**
+   * Populate Delivery dropdown. Accept optional selectedId to set value (used in edit mode).
+   */
+  function loadDeliveries(selectedId = '') {
+    google.script.run.withSuccessHandler(deliveries => {
+      if (!salesDeliveryIdInput) return;
+      salesDeliveryIdInput.innerHTML = deliveries.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+      if (selectedId) {
+        const opt = Array.from(salesDeliveryIdInput.options).find(o => o.value == selectedId);
+        if (opt) salesDeliveryIdInput.value = selectedId;
+        const isEdit = currentEditingInternalId !== null;
+        salesDeliveryIdInput.disabled = isEdit;
+        salesDeliveryIdInput.classList.toggle('disabled-input', isEdit);
+      }
+    }).getDeliveriesForForm();
+  }
+
   // Helper: derive a friendly filename from a Drive URL or full path
   function getFilenameFromUrl(url) {
     if (!url) return '';
@@ -1098,6 +1122,8 @@
 
         // Set vendor dropdown to saved vendor and disable it
         loadVendors(poData.vendorId || '');
+        // Set delivery dropdown to saved delivery and disable it
+        loadDeliveries(poData.deliveryId || '');
 
         // Handle uploaded files: show link and disable file inputs if already uploaded
         showUploadedFile(salesPOFileInput, poData.poLink || '', 'po');
@@ -1107,10 +1133,12 @@
         console.log('Ensuring material search input visible for add mode');
         materialSearchInputSales.classList.remove('hidden');
 
-        // Ensure vendor dropdown is loaded and enabled
+        // Ensure vendor & delivery dropdowns are loaded and enabled
         loadVendors();
+        loadDeliveries();
         salesVendorIdInput.disabled = false;
         salesVendorIdInput.classList.remove('disabled-input');
+        if (salesDeliveryIdInput) { salesDeliveryIdInput.disabled = false; salesDeliveryIdInput.classList.remove('disabled-input'); }
 
         // Ensure file inputs are enabled and any labels cleared
         clearUploadedFileLabel(salesPOFileInput);
@@ -1237,14 +1265,16 @@
         successMessage = `New Sales Order ${customerPoId} submitted successfully.`;
     }
     
-    // Collect vendor and file data
-    const vendorId = salesVendorIdInput.value;
+    // Collect vendor, delivery and file data
+    const vendorId = salesVendorIdInput ? salesVendorIdInput.value : '';
+    const deliveryId = salesDeliveryIdInput ? salesDeliveryIdInput.value : '';
     const filesMeta = await getFilesMeta(); // implement getFilesMeta to read and encode files
 
     // Add vendor and files to payload
     payload.vendorId = vendorId;
+    payload.deliveryId = deliveryId;
     payload.filesMeta = filesMeta;
-    
+
     toggleLoading(true, 'sales');
 
     console.log('Sales payload prepared for', callFunction);
@@ -1346,25 +1376,10 @@
 
   // Add vendor select and file upload logic
   const salesVendorIdInput = document.getElementById('sales-vendor-id');
+  const salesDeliveryIdInput = document.getElementById('sales-delivery-id');
   const salesPOFileInput = document.getElementById('sales-po-file');
   const salesInvoiceFileInput = document.getElementById('sales-invoice-file');
   const salesEWayFileInput = document.getElementById('sales-eway-file');
-
-  // Populate vendor dropdown
-  function loadVendors(selectedId = '') {
-    google.script.run.withSuccessHandler(vendors => {
-      salesVendorIdInput.innerHTML = vendors.map(v => `<option value="${v.id}">${v.name}</option>`).join('');
-      if (selectedId) {
-        // If the provided vendor exists in list, set it; otherwise keep as-is
-        const opt = Array.from(salesVendorIdInput.options).find(o => o.value == selectedId);
-        if (opt) salesVendorIdInput.value = selectedId;
-        // Disable in edit mode (currentEditingInternalId controls edit mode)
-        const isEdit = currentEditingInternalId !== null;
-        salesVendorIdInput.disabled = isEdit;
-        salesVendorIdInput.classList.toggle('disabled-input', isEdit);
-      }
-    }).getVendorsForForm();
-  }
 
   /**
    * Read up to three file inputs and return metadata array in fixed order [PO, Invoice, EWay].

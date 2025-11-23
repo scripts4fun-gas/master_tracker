@@ -24,9 +24,10 @@ function getSheetByName(sheetName) {
     } else if (sheetName === MATERIAL_SHEET_NAME) {
       sheet.getRange(1, 1, 1, 2).setValues([['Product ID', 'Product Name']]);
     } else if (sheetName === SALES_SHEET_NAME) {
-      sheet.getRange(1, 1, 1, 10).setValues([[[
+      // Sales headers: include Vendor ID and Delivery ID and three link columns
+      sheet.getRange(1, 1, 1, 11).setValues([[
         'Sale ID', 'Sale PO Number', 'Date of PO', 'Appointment Date', 'Invoice Number',
-        'Vendor ID', 'PO Link', 'Invoice Link', 'EWay Link'
+        'Vendor ID', 'Delivery ID', 'PO Link', 'Invoice Link', 'EWay Link', '...materials start here'
       ]]);
     } else if (sheetName === PO_SHEET_NAME) {
       // Purchase headers are set to a minimum here (A to E)
@@ -39,6 +40,8 @@ function getSheetByName(sheetName) {
       sheet.getRange(1, 1, 1, 1).setValues([['Metric']]);
     } else if (sheetName === VENDOR_SHEET_NAME) {
       sheet.getRange(1, 1, 1, 2).setValues([['Vendor ID', 'Vendor Name']]);
+    } else if (sheetName === DELIVERY_SHEET_NAME) {
+      sheet.getRange(1, 1, 1, 2).setValues([['Delivery ID', 'Delivery Name']]);
     }
   }
   return sheet;

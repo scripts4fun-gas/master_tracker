@@ -143,6 +143,7 @@ function addSalesOrder(salesData) {
     newRow[SALES_COL_APPOINTMENT_DATE] = salesData.appointmentDate ? new Date(salesData.appointmentDate) : '';
     newRow[SALES_COL_INVOICE] = salesData.invoiceNumber;
     newRow[SALES_COL_VENDOR_ID] = salesData.vendorId || '';
+    newRow[SALES_COL_DELIVERY_ID] = salesData.deliveryId || '';
 
     // --- 3. Handle file uploads ---
     let poLink = '', invLink = '', ewayLink = '';
@@ -241,6 +242,12 @@ function updateSalesOrder(updateData) {
     if (typeof updateData.vendorId !== 'undefined' && updateData.vendorId !== null) {
       const newVendorId = updateData.vendorId || '';
       salesSheet.getRange(rowNumberInSheet, SALES_COL_VENDOR_ID + 1).setValue(newVendorId);
+    }
+
+    // Delivery ID (optional)
+    if (typeof updateData.deliveryId !== 'undefined' && updateData.deliveryId !== null) {
+      const newDeliveryId = updateData.deliveryId || '';
+      salesSheet.getRange(rowNumberInSheet, SALES_COL_DELIVERY_ID + 1).setValue(newDeliveryId);
     }
 
     // Handle file uploads (PO, Invoice, EWay) if provided in updateData.filesMeta
@@ -357,6 +364,7 @@ function getSalesData() {
             rawAppointmentDate: rawAppointmentDate, // Form input format
             invoiceNumber: invoiceNumber, // NEW: For update
             vendorId: row[SALES_COL_VENDOR_ID] || '',     // NEW: Vendor ID for form
+            deliveryId: row[SALES_COL_DELIVERY_ID] || '', // NEW: Delivery ID for form
             poLink: row[SALES_COL_PO_LINK] || '',        // NEW: PO document URL
             invLink: row[SALES_COL_INV_LINK] || '',      // NEW: Invoice document URL
             ewayLink: row[SALES_COL_EWAY_LINK] || '',    // NEW: EWay document URL
@@ -699,4 +707,28 @@ function uploadFilesToDrive(folderId, subPath, files) {
     }
   }
   return urls;
+}
+
+/**
+ * Returns a list of deliveries from the Delivery sheet.
+ * For now, assumes a 'Delivery' sheet with columns: [Delivery ID, Delivery Name]
+ */
+function getDeliveriesForForm() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const deliverySheet = ss.getSheetByName(DELIVERY_SHEET_NAME);
+    if (!deliverySheet) return [];
+    const data = deliverySheet.getDataRange().getValues();
+    const deliveries = [];
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][DELIVERY_COL_ID]) deliveries.push({
+        id: data[i][DELIVERY_COL_ID],
+        name: data[i][DELIVERY_COL_NAME]
+      });
+    }
+    return deliveries;
+  } catch (e) {
+    Logger.log("Error in getDeliveriesForForm: " + e.toString());
+    return [];
+  }
 }
