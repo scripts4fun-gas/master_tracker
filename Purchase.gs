@@ -732,3 +732,110 @@ function getDeliveriesForForm() {
     return [];
   }
 }
+
+/**
+ * Sends vehicle/PO details email for a Sales Order identified by internalId.
+ * - Validates presence of PO Link, Delivery ID and Vendor ID; returns error if any missing.
+ * - Makes the PO file (if a Drive URL) shareable "anyone with the link" before sending.
+ * - Looks up Delivery Vehicle from Delivery sheet (third column) and Vendor name from Vendor sheet.
+ * @param {string} internalId Sales internal ID (e.g. "S001")
+ * @returns {object} { success: true, message: '...' } or { error: true, message: '...' }
+ */
+function sendVehicleEmail(internalId) {
+  try {
+    if (!internalId) return { error: true, message: 'Missing internalId' };
+
+    const salesSheet = getSheetByName(SALES_SHEET_NAME);
+    const data = salesSheet.getDataRange().getValues(); // includes header
+
+    // find row (0-based index within array)
+    let rowIndex = -1;
+    for (let i = 1; i < data.length; i++) {
+      const val = data[i][SALES_COL_INTERNAL_ID];
+      if (val && val.toString().trim() === internalId.toString().trim()) {
+        rowIndex = i;
+        break;
+      }
+    }
+    if (rowIndex === -1) return { error: true, message: `Sales order ${internalId} not found.` };
+
+    const row = data[rowIndex];
+    const poNumber = row[SALES_COL_PO_NUMBER] || '';
+    const poLink = row[SALES_COL_PO_LINK] ? row[SALES_COL_PO_LINK].toString().trim() : '';
+    const deliveryId = row[SALES_COL_DELIVERY_ID] ? row[SALES_COL_DELIVERY_ID].toString().trim() : '';
+    const vendorId = row[SALES_COL_VENDOR_ID] ? row[SALES_COL_VENDOR_ID].toString().trim() : '';
+
+    // Validate required fields before proceeding
+    if (!poLink) {
+      return { error: true, message: 'Mail not sent: PO not uploaded' };
+    }
+    if (!deliveryId) {
+      return { error: true, message: 'Mail not sent: Delivery Not selected' };
+    }
+    if (!vendorId) {
+      return { error: true, message: 'Mail not sent: Vendor not selected' };
+    }
+
+    // Ensure PO file (if Drive url) is shareable by anyone with link
+    let safePoLink = poLink;
+    if (poLink && typeof poLink === 'string') {
+      const idMatch = poLink.match(/\/d\/([a-zA-Z0-9_-]+)/) || poLink.match(/id=([a-zA-Z0-9_-]+)/);
+      const fileId = idMatch ? idMatch[1] : null;
+      if (fileId) {
+        try {
+          const file = DriveApp.getFileById(fileId);
+          file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+          safePoLink = file.getUrl();
+        } catch (e) {
+          Logger.log('sendVehicleEmail: failed to set sharing for fileId=' + fileId + ' -> ' + e.toString());
+          // proceed with original link if sharing fails
+        }
+      }
+    }
+
+    // Lookup Delivery Vehicle from Delivery sheet
+    let deliveryVehicle = '';
+    if (deliveryId) {
+      const deliverySheet = getSheetByName(DELIVERY_SHEET_NAME);
+      if (deliverySheet) {
+        const dData = deliverySheet.getDataRange().getValues();
+        for (let i = 1; i < dData.length; i++) {
+          if (dData[i][DELIVERY_COL_ID] && dData[i][DELIVERY_COL_ID].toString().trim() === deliveryId) {
+            deliveryVehicle = dData[i][DELIVERY_COL_VEHICLE] || '';
+            break;
+          }
+        }
+      }
+    }
+
+    // Lookup Vendor details from Vendor sheet
+    let vendorName = '';
+    if (vendorId) {
+      const vendorSheet = getSheetByName(VENDOR_SHEET_NAME);
+      if (vendorSheet) {
+        const vData = vendorSheet.getDataRange().getValues();
+        for (let i = 1; i < vData.length; i++) {
+          if (vData[i][VENDOR_COL_ID] && vData[i][VENDOR_COL_ID].toString().trim() === vendorId) {
+            vendorName = vData[i][VENDOR_COL_NAME] || '';
+            break;
+          }
+        }
+      }
+    }
+
+    // Compose email
+    const to = (typeof NOTIFY_EMAIL !== 'undefined' && NOTIFY_EMAIL) ? NOTIFY_EMAIL : '';
+    if (!to) return { error: true, message: 'Notification email not configured on server.' };
+
+    const subject = 'Details for Invoice';
+    let body = `PO Number: ${poNumber || 'N/A'}\n\nLink to PO: ${safePoLink || 'N/A'}\n\nDelivery Vehicle: ${deliveryVehicle || 'N/A'}\n\nVendor Name: ${vendorName || 'N/A'}`;
+
+    // Send email (MailApp)
+    MailApp.sendEmail({ to: to, subject: subject, body: body });
+
+    return { success: true, message: `Notification sent to ${to}` };
+  } catch (e) {
+    Logger.log('Error in sendVehicleEmail: ' + e.toString());
+    return { error: true, message: 'Failed to send vehicle email: ' + e.toString() };
+  }
+}

@@ -63,3 +63,7 @@ const VENDOR_COL_NAME = 1;  // Column B: Vendor Name
 const DELIVERY_SHEET_NAME = 'Delivery';
 const DELIVERY_COL_ID = 0;    // Column A: Delivery ID
 const DELIVERY_COL_NAME = 1;  // Column B: Delivery Name
+const DELIVERY_COL_VEHICLE = 2; // Column C: Delivery Vehicle (new)
+
+// Email to receive vehicle/PO detail notifications
+const NOTIFY_EMAIL = 'symphonyashwin92@gmail.com'; // <-- set your recipient here
