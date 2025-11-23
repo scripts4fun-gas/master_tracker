@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <title>Inventory Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Custom CSS for a better aesthetic and hover effect */
+    body { font-family: 'Inter', sans-serif; background-color: #f7f9fb; }
+    .card { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); }
+    .btn-primary { transition: all 0.2s; }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 6px rgba(49, 130, 206, 0.5); }
+    
+    /* Modal styles */
+    .modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 50;
+    }
+    .modal-content {
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+    
+    /* Disabled/Greyed out styles for edit form */
+    .disabled-input {
+        background-color: #f0f4f8 !important;
+        cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+
+<div id="app" class="min-h-screen p-4 sm:p-8 flex items-center justify-center">
+
+  <!-- Login/OTP View -->
+  <div id="login-container" class="w-full max-w-md bg-white p-6 sm:p-10 rounded-xl card transition-all duration-300">
+    <h1 class="text-3xl font-extrabold text-gray-800 text-center mb-6">Inventory Access</h1>
+    
+    <div id="login-form">
+      <div class="mb-4">
+        <label for="email" class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+        <input type="email" id="email" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="your.email@example.com">
+      </div>
+      <div class="mb-6">
+        <label for="otp" class="block text-sm font-medium text-gray-700 mb-1">One-Time Password (OTP)</label>
+        <input type="text" id="otp" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="Enter 6-digit code">
+      </div>
+      
+      <div class="flex flex-col space-y-3">
+        <button id="request-otp-btn" class="btn-primary w-full px-4 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-500 focus:ring-opacity-50" onclick="handleRequestOTP()">
+          Request OTP
+        </button>
+        <button id="validate-otp-btn" class="btn-primary w-full px-4 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-green-500 focus:ring-opacity-50" onclick="handleValidateOTP()">
+          Validate & Sign In
+        </button>
+      </div>
+    </div>
+
+    <div id="message-area" class="mt-4 p-3 rounded-lg text-sm text-center hidden"></div>
+
+    <div id="loading-spinner" class="hidden text-center mt-4">
+        <svg class="animate-spin h-6 w-6 text-indigo-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+    </div>
+  </div>
+
+  <!-- Main Dashboard View -->
+  <div id="dashboard-container" class="hidden w-full max-w-6xl bg-white p-6 sm:p-10 rounded-xl card transition-all duration-300">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-3xl font-extrabold text-gray-800">Inventory Dashboard</h1>
+        <button id="sign-out-btn" class="text-sm font-medium text-red-500 hover:text-red-700" onclick="handleSignOut()">
+            Sign Out
+        </button>
+    </div>
+    
+    <!-- Action Buttons -->
+    <div class="flex flex-wrap gap-4 mb-8">
+      <!-- Purchase PO Button -->
+      <button class="btn-primary flex-1 min-w-[150px] px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600" onclick="openPOForm()">
+        + Add Purchase PO
+      </button>
+      <!-- Sales PO Button -->
+      <button class="btn-primary flex-1 min-w-[150px] px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600" onclick="openSalesPOForm()">
+        + Add Sales PO
+      </button>
+      <button class="btn-primary flex-1 min-w-[150px] px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600">
+        + Add Manual Stock
+      </button>
+    </div>
+
+    <!-- Sales PO Table -->
+    <h2 class="text-2xl font-bold text-gray-700 mb-4">Current Sales Orders (SOs)</h2>
+    <div class="overflow-x-auto rounded-lg border border-gray-200">
+      <table id="sales-po-table" class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12"><!-- Edit Icon --></th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sales PO Number</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date of PO</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Appointment Date</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
+          </tr>
+        </thead>
+        <tbody id="sales-po-body" class="bg-white divide-y divide-gray-200">
+          <!-- Data will be inserted here -->
+          <tr><td colspan="5" class="px-6 py-4 text-center text-gray-500">Loading data...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div id="data-message-area" class="mt-4 p-3 rounded-lg text-sm text-center hidden"></div>
+  </div>
+
+</div>
+
+<!-- Purchase Order Form Modal -->
+<div id="po-modal" class="modal hidden">
+    <div class="modal-content w-full max-w-3xl bg-white p-6 sm:p-8 rounded-xl card relative">
+        <h2 class="text-2xl font-bold text-gray-800 mb-6">New Purchase Order Entry</h2>
+        <button class="absolute top-4 right-4 text-gray-500 hover:text-gray-700" onclick="closePOForm()">
+            <!-- Close icon (X) -->
+            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </button>
+
+        <form id="po-form" onsubmit="event.preventDefault(); handleSubmitPO()">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                
+                <!-- Vendor PO ID (External, user-entered, Column B) -->
+                <div>
+                    <label for="vendor-po-id" class="block text-sm font-medium text-gray-700 mb-1">Vendor PO ID <span class="text-red-500">*</span></label>
+                    <input type="text" id="vendor-po-id" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="e.g., VENDOR-XYZ-123">
+                </div>
+
+                <!-- PO Date (Column C) -->
+                <div>
+                    <label for="po-date" class="block text-sm font-medium text-gray-700 mb-1">PO Date <span class="text-red-500">*</span></label>
+                    <input type="date" id="po-date" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                </div>
+
+                <!-- Despatch Date (Column D) -->
+                <div>
+                    <label for="despatch-date" class="block text-sm font-medium text-gray-700 mb-1">Despatch Date</label>
+                    <input type="date" id="despatch-date" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                </div>
+
+                <!-- Invoice (Column E) -->
+                <div> 
+                    <label for="invoice-number" class="block text-sm font-medium text-gray-700 mb-1">Invoice Number</label>
+                    <input type="text" id="invoice-number" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="Optional">
+                </div>
+            </div>
+
+            <!-- Material Selection Table -->
+            <h3 class="text-xl font-semibold text-gray-700 mb-4">Material Quantities <span class="text-red-500">*</span></h3>
+            
+            <input type="text" id="material-search-po" onkeyup="filterMaterials('po')" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 mb-4" placeholder="Search material by name or ID...">
+
+            <div class="overflow-y-auto max-h-72 border border-gray-200 rounded-lg">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50 sticky top-0">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">ID</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-2/4">Material Name</th>
+                            <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">Quantity</th>
+                        </tr>
+                    </thead>
+                    <tbody id="material-list-body-po" class="bg-white divide-y divide-gray-100">
+                        <!-- Materials loaded here -->
+                        <tr><td colspan="3" class="px-6 py-4 text-center text-gray-500">Loading materials...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div id="po-message-area" class="mt-4 p-3 rounded-lg text-sm text-center hidden"></div>
+
+            <div class="flex justify-end mt-6 space-x-3">
+                <button type="button" class="px-4 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300" onclick="closePOForm()">
+                    Cancel
+                </button>
+                <button type="submit" id="po-submit-btn" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-500 focus:ring-opacity-50">
+                    Submit PO
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Sales Order Form Modal (Updated for Edit/Add) -->
+<div id="sales-po-modal" class="modal hidden">
+    <div class="modal-content w-full max-w-3xl bg-white p-6 sm:p-8 rounded-xl card relative">
+        <h2 id="sales-modal-title" class="text-2xl font-bold text-gray-800 mb-6">New Sales Order Entry</h2>
+        <button class="absolute top-4 right-4 text-gray-500 hover:text-gray-700" onclick="closeSalesPOForm()">
+            <!-- Close icon (X) -->
+            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </button>
+
+        <form id="sales-po-form" onsubmit="event.preventDefault(); handleSubmitSalesPO()">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                
+                <!-- Customer PO ID (Column B) -->
+                <div>
+                    <label for="customer-po-id" class="block text-sm font-medium text-gray-700 mb-1">Customer PO ID <span class="text-red-500">*</span></label>
+                    <input type="text" id="customer-po-id" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="e.g., CUST-ABC-456">
+                </div>
+
+                <!-- Date of PO (Column C) -->
+                <div>
+                    <label for="sales-po-date" class="block text-sm font-medium text-gray-700 mb-1">Date of PO <span class="text-red-500">*</span></label>
+                    <input type="date" id="sales-po-date" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                </div>
+
+                <!-- Appointment Date (Column D) - EDITABLE -->
+                <div>
+                    <label for="appointment-date" class="block text-sm font-medium text-gray-700 mb-1">Appointment/Delivery Date</label>
+                    <input type="date" id="appointment-date" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                
+                <!-- Invoice Number (Column E) - EDITABLE -->
+                <div> 
+                    <label for="sales-invoice-number" class="block text-sm font-medium text-gray-700 mb-1">Invoice Number</label>
+                    <input type="text" id="sales-invoice-number" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="Optional">
+                </div>
+            </div>
+
+            <!-- Material Selection Table -->
+            <h3 class="text-xl font-semibold text-gray-700 mb-4">Material Quantities <span class="text-red-500">*</span></h3>
+            
+            <input type="text" id="material-search-sales" onkeyup="filterMaterials('sales')" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 mb-4" placeholder="Search material by name or ID...">
+
+            <div class="overflow-y-auto max-h-72 border border-gray-200 rounded-lg">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50 sticky top-0">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">ID</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-2/4">Material Name</th>
+                            <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">Quantity</th>
+                        </tr>
+                    </thead>
+                    <tbody id="material-list-body-sales" class="bg-white divide-y divide-gray-100">
+                        <!-- Materials loaded here -->
+                        <tr><td colspan="3" class="px-6 py-4 text-center text-gray-500">Loading materials...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div id="sales-po-message-area" class="mt-4 p-3 rounded-lg text-sm text-center hidden"></div>
+
+            <div class="flex justify-end mt-6 space-x-3">
+                <button type="button" class="px-4 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300" onclick="closeSalesPOForm()">
+                    Cancel
+                </button>
+                <button type="submit" id="sales-po-submit-btn" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-500 focus:ring-opacity-50">
+                    Submit Sale
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ITEM DETAILS MODAL -->
+<div id="item-details-modal" class="modal hidden">
+    <div class="modal-content w-full max-w-lg bg-white p-6 sm:p-8 rounded-xl card relative">
+        <h2 id="item-details-title" class="text-xl font-bold text-gray-800 mb-6">Details for PO #</h2>
+        <button class="absolute top-4 right-4 text-gray-500 hover:text-gray-700" onclick="closeItemDetailsModal()">
+            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </button>
+
+        <div class="overflow-y-auto max-h-80 border border-gray-200 rounded-lg">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50 sticky top-0">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Material Name</th>
+                        <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">Quantity</th>
+                    </tr>
+                </thead>
+                <tbody id="item-details-body" class="bg-white divide-y divide-gray-100">
+                    <!-- Item details rows go here -->
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="flex justify-end mt-6">
+            <button type="button" class="px-4 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600" onclick="closeItemDetailsModal()">
+                Close
+            </button>
+        </div>
+    </div>
+</div>
+
+
+<script>
+  const emailInput = document.getElementById('email');
+  const otpInput = document.getElementById('otp');
+  const messageArea = document.getElementById('message-area');
+  const loadingSpinner = document.getElementById('loading-spinner');
+  const loginContainer = document.getElementById('login-container');
+  const dashboardContainer = document.getElementById('dashboard-container');
+  const salesPOBody = document.getElementById('sales-po-body');
+  const dataMessageArea = document.getElementById('data-message-area');
+  
+  // Purchase Order Form Elements
+  const poModal = document.getElementById('po-modal');
+  const poForm = document.getElementById('po-form');
+  const poMessageArea = document.getElementById('po-message-area');
+  const materialListBodyPO = document.getElementById('material-list-body-po'); // Specific for PO
+  const materialSearchInputPO = document.getElementById('material-search-po'); // Specific for PO
+  
+  // Sales Order Form Elements (NEW)
+  const salesPOModal = document.getElementById('sales-po-modal');
+  const salesModalTitle = document.getElementById('sales-modal-title');
+  const salesPOForm = document.getElementById('sales-po-form');
+  const salesPOMessageArea = document.getElementById('sales-po-message-area');
+  const materialListBodySales = document.getElementById('material-list-body-sales'); // Specific for Sales
+  const materialSearchInputSales = document.getElementById('material-search-sales'); // Specific for Sales
+
+  // Item Details Modal Elements
+  const itemDetailsModal = document.getElementById('item-details-modal');
+  const itemDetailsTitle = document.getElementById('item-details-title');
+  const itemDetailsBody = document.getElementById('item-details-body');
+
+  // Sales Form Specific Inputs
+  const customerPoIdInput = document.getElementById('customer-po-id');
+  const salesPoDateInput = document.getElementById('sales-po-date');
+  const appointmentDateInput = document.getElementById('appointment-date');
+  const salesInvoiceNumberInput = document.getElementById('sales-invoice-number');
+  const salesSubmitBtn = document.getElementById('sales-po-submit-btn');
+
+  // --- Data & State ---
+  const SESSION_KEY = 'isLoggedIn';
+  let allMaterials = []; // Stores the full list of materials from the server
+  let currentEditingInternalId = null; // Stores the internal ID if in edit mode
+
+  // --- UTILITIES ---
+
+  /**
+   * Utility to show feedback messages.
+   * @param {string} msg The message to display.
+   * @param {boolean} isSuccess Whether the message is for a success (true) or error (false).
+   */
+  function showMessage(msg, isSuccess, targetArea = messageArea) {
+    targetArea.textContent = msg;
+    targetArea.className = `mt-4 p-3 rounded-lg text-sm text-center ${isSuccess ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`;
+    targetArea.style.display = 'block';
+    targetArea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  /**
+   * Toggles the visibility of the loading spinner.
+   * @param {boolean} show True to show, false to hide.
+   * @param {string} type 'login', 'po', or 'sales' to target specific buttons
+   */
+  function toggleLoading(show, type = 'login') {
+    if (type === 'login') {
+        loadingSpinner.style.display = show ? 'block' : 'none';
+        const buttons = document.querySelectorAll('#login-form button');
+        buttons.forEach(btn => btn.disabled = show);
+    } else if (type === 'po') {
+        document.getElementById('po-submit-btn').disabled = show;
+    } else if (type === 'sales') {
+        document.getElementById('sales-po-submit-btn').disabled = show;
+    }
+  }
+
+  // --- AUTH LOGIC ---
+
+  function handleRequestOTP() {
+    const email = emailInput.value.trim();
+    if (!email) {
+      showMessage("Please enter your email address.", false);
+      return;
+    }
+
+    messageArea.style.display = 'none';
+    toggleLoading(true, 'login');
+
+    google.script.run
+      .withSuccessHandler(result => {
+        toggleLoading(false, 'login');
+        showMessage(result.message, result.success);
+      })
+      .withFailureHandler(error => {
+        toggleLoading(false, 'login');
+        showMessage(`Server Error: ${error}`, false);
+      })
+      .processEmailRequest(email);
+  }
+
+  function handleValidateOTP() {
+    const email = emailInput.value.trim();
+    const otp = otpInput.value.trim();
+
+    if (!email || !otp) {
+      showMessage("Please enter both email and OTP.", false);
+      return;
+    }
+
+    messageArea.style.display = 'none';
+    toggleLoading(true, 'login');
+
+    google.script.run
+      .withSuccessHandler(result => {
+        toggleLoading(false, 'login');
+        if (result.success) {
+          showMessage(result.message, true);
+          sessionStorage.setItem(SESSION_KEY, email);
+          showDashboard(email);
+        } else {
+          showMessage(result.message, false);
+        }
+      })
+      .withFailureHandler(error => {
+        toggleLoading(false, 'login');
+        showMessage(`Server Error: ${error}`, false);
+      })
+      .validateOTP(email, otp);
+  }
+
+  function handleSignOut() {
+    sessionStorage.removeItem(SESSION_KEY);
+    dashboardContainer.style.display = 'none';
+    loginContainer.style.display = 'block';
+    emailInput.value = '';
+    otpInput.value = '';
+    messageArea.style.display = 'none';
+    const welcomeMessage = document.querySelector('#dashboard-container h1');
+    if (welcomeMessage) {
+        welcomeMessage.textContent = 'Inventory Dashboard';
+    }
+    salesPOBody.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-gray-500">Loading data...</td></tr>';
+    dataMessageArea.style.display = 'none';
+  }
+
+  function checkSession() {
+      const loggedInEmail = sessionStorage.getItem(SESSION_KEY);
+      if (loggedInEmail) {
+          emailInput.value = loggedInEmail; 
+          showDashboard(loggedInEmail);
+      }
+  }
+
+  // --- DASHBOARD DATA & VIEW ---
+
+  function showDashboard(email) {
+    loginContainer.style.display = 'none';
+    dashboardContainer.style.display = 'block';
+    const welcomeMessage = document.querySelector('#dashboard-container h1');
+    if (welcomeMessage) {
+        welcomeMessage.textContent = `Welcome, ${email || 'User'}`;
+    }
+    loadSalesData();
+  }
+
+  function loadSalesData() {
+    salesPOBody.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-gray-500">Loading sales data...</td></tr>';
+    dataMessageArea.style.display = 'none';
+
+    google.script.run
+      .withSuccessHandler(data => {
+        if (data.error) {
+            salesPOBody.innerHTML = '';
+            showMessage(data.message, false, dataMessageArea);
+            return;
+        }
+
+        salesPOBody.innerHTML = ''; // Clear loading row
+
+        if (data.length === 0) {
+            salesPOBody.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-gray-500">No sales orders found.</td></tr>';
+            return;
+        }
+
+        data.forEach(po => {
+          const row = document.createElement('tr');
+          row.className = 'hover:bg-gray-50';
+          
+          // Encode the displayItemDetails string for the details modal
+          const encodedDetails = encodeURIComponent(po.displayItemDetails);
+          
+          // Encode the entire PO object for passing to the edit function
+          const encodedPO = encodeURIComponent(JSON.stringify(po));
+
+          row.innerHTML = `
+            <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-medium text-gray-900">
+                <button class="text-indigo-500 hover:text-indigo-700 transition-colors" 
+                        onclick="openEditSalesPOForm('${encodedPO}')">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                    </svg>
+                </button>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${po.poNumber}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${po.dateOfPO}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${po.appointmentDate}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              <button class="text-blue-500 hover:text-blue-700 font-semibold text-xs py-1 px-3 rounded-full bg-blue-100 transition-colors" 
+                      onclick="openItemDetailsModal('${po.poNumber}', '${encodedDetails}')">
+                  View Items
+              </button>
+            </td>
+          `;
+          salesPOBody.appendChild(row);
+        });
+      })
+      .withFailureHandler(error => {
+        salesPOBody.innerHTML = '';
+        showMessage(`Failed to load data: ${error}`, false, dataMessageArea);
+      })
+      .getSalesData();
+  }
+
+  // --- ITEM DETAILS MODAL LOGIC ---
+  
+  /**
+   * Opens the item details modal and populates the table.
+   * @param {string} poNumber The PO number to display in the title.
+   * @param {string} encodedDetails The URL-encoded string of item details ("Product: Qty\n...").
+   */
+  function openItemDetailsModal(poNumber, encodedDetails) {
+      itemDetailsTitle.textContent = `Details for Sales PO #${poNumber}`;
+      itemDetailsBody.innerHTML = ''; // Clear previous data
+      
+      const detailsString = decodeURIComponent(encodedDetails);
+      const items = detailsString.split('\n').filter(item => item.trim() !== '');
+
+      if (items.length === 0) {
+          itemDetailsBody.innerHTML = '<tr><td colspan="2" class="px-6 py-4 text-center text-gray-500">No items recorded for this order.</td></tr>';
+      } else {
+          items.forEach(item => {
+              // Item format is "Material Name: Quantity"
+              const parts = item.split(':');
+              const materialName = parts[0].trim();
+              const quantity = parts.length > 1 ? parts[1].trim() : 'N/A';
+              
+              const row = document.createElement('tr');
+              row.className = 'hover:bg-gray-50';
+              row.innerHTML = `
+                  <td class="px-6 py-2 text-sm font-medium text-gray-900">${materialName}</td>
+                  <td class="px-6 py-2 text-center text-sm text-gray-700">${quantity}</td>
+              `;
+              itemDetailsBody.appendChild(row);
+          });
+      }
+
+      itemDetailsModal.classList.remove('hidden');
+  }
+
+  /**
+   * Closes the item details modal.
+   */
+  function closeItemDetailsModal() {
+      itemDetailsModal.classList.add('hidden');
+  }
+  
+  // --- UTILITY FOR BOTH PO/SALES FORMS ---
+  
+  /**
+   * Fetches materials from the backend for the PO/Sales forms.
+   */
+  function loadMaterials(callback) {
+      if (allMaterials.length > 0) {
+          if (callback) callback(allMaterials);
+          return;
+      }
+    
+      // Show loading in both forms until data is fetched
+      materialListBodyPO.innerHTML = '<tr><td colspan="3" class="px-6 py-4 text-center text-gray-500">Fetching materials list...</td></tr>';
+      materialListBodySales.innerHTML = '<tr><td colspan="3" class="px-6 py-4 text-center text-gray-500">Fetching materials list...</td></tr>';
+    
+      google.script.run
+          .withSuccessHandler(materials => {
+              allMaterials = materials;
+              if (callback) callback(materials);
+          })
+          .withFailureHandler(error => {
+              const errorMessage = `<tr><td colspan="3" class="px-6 py-4 text-center text-red-500">Error loading materials: ${error}</td></tr>`;
+              materialListBodyPO.innerHTML = errorMessage;
+              materialListBodySales.innerHTML = errorMessage;
+          })
+          .getMaterialsForForm();
+  }
+  
+  /**
+   * Renders the material list in the specified table body.
+   * @param {Array<object>} materials The list of materials to render.
+   * @param {string} type 'po' or 'sales'
+   * @param {object} initialQuantities Map of materialId to quantity (only used in 'sales' edit mode)
+   */
+  function renderMaterials(materials, type, initialQuantities = {}) {
+    const targetBody = type === 'po' ? materialListBodyPO : materialListBodySales;
+    const isEditMode = type === 'sales' && currentEditingInternalId !== null;
+
+    targetBody.innerHTML = '';
+    
+    if (materials.length === 0) {
+        targetBody.innerHTML = '<tr><td colspan="3" class="px-6 py-4 text-center text-gray-500">No materials found in the system.</td></tr>';
+        return;
+    }
+
+    materials.forEach(mat => {
+      const quantity = initialQuantities[mat.id] || 0;
+      
+      // Only render items with quantity > 0 in sales edit mode, OR all items in add mode
+      if (isEditMode && quantity === 0) {
+          return;
+      }
+      
+      const row = document.createElement('tr');
+      row.setAttribute('data-material-id', mat.id);
+      row.setAttribute('data-material-name', mat.name.toLowerCase());
+      row.className = 'hover:bg-gray-50 material-row';
+      
+      const quantityInputId = `qty-${type}-${mat.id}`;
+      const inputDisabledClass = isEditMode ? 'disabled-input' : '';
+      const inputDisabledAttr = isEditMode ? 'disabled' : '';
+      const buttonDisabledAttr = isEditMode ? 'disabled' : '';
+
+      row.innerHTML = `
+        <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-500">${mat.id}</td>
+        <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900">${mat.name}</td>
+        <td class="px-6 py-2 text-center">
+            <div class="flex items-center justify-center space-x-1">
+                <button type="button" class="qty-btn px-2 py-1 bg-gray-200 rounded-lg text-gray-700 font-bold text-base ${isEditMode ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-300'}" 
+                        onclick="updateQuantity('${mat.id}', -1, '${type}')" ${buttonDisabledAttr}>-</button>
+                <input type="number" id="${quantityInputId}" 
+                       data-material-id="${mat.id}"
+                       data-form-type="${type}"
+                       class="w-16 p-1 text-center border border-gray-300 rounded-lg text-sm ${inputDisabledClass}" 
+                       value="${quantity}" min="0" onchange="validateQuantityInput(this)" ${inputDisabledAttr}>
+                <button type="button" class="qty-btn px-2 py-1 bg-gray-200 rounded-lg text-gray-700 font-bold text-base ${isEditMode ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-300'}" 
+                        onclick="updateQuantity('${mat.id}', 1, '${type}')" ${buttonDisabledAttr}>+</button>
+            </div>
+        </td>
+      `;
+      targetBody.appendChild(row);
+    });
+
+    if (isEditMode && targetBody.children.length === 0) {
+        // If in edit mode but no items had quantity > 0
+        targetBody.innerHTML = '<tr><td colspan="3" class="px-6 py-4 text-center text-gray-500">No materials were recorded on this order.</td></tr>';
+    }
+  }
+  
+  /**
+   * Filters the material table based on search input.
+   * @param {string} type 'po' or 'sales'
+   */
+  function filterMaterials(type) {
+      // NOTE: Filtering is disabled in Sales Edit Mode as only relevant items are shown.
+      if (type === 'sales' && currentEditingInternalId !== null) return;
+      
+      const filter = (type === 'po' ? materialSearchInputPO : materialSearchInputSales).value.toLowerCase().trim();
+      const rows = document.querySelectorAll(type === 'po' ? '#material-list-body-po .material-row' : '#material-list-body-sales .material-row');
+      
+      rows.forEach(row => {
+          const id = row.getAttribute('data-material-id').toLowerCase();
+          const name = row.getAttribute('data-material-name');
+          
+          if (name.includes(filter) || id.includes(filter)) {
+              row.style.display = '';
+          } else {
+              row.style.display = 'none';
+          }
+      });
+  }
+  
+  // ... (updateQuantity and validateQuantityInput remain the same) ...
+
+  function updateQuantity(matId, delta, type) {
+      // Prevent modification if in Sales Edit Mode
+      if (type === 'sales' && currentEditingInternalId !== null) return;
+      
+      const input = document.getElementById(`qty-${type}-${matId}`);
+      if (!input) return;
+      
+      let currentValue = parseInt(input.value) || 0;
+      let newValue = currentValue + delta;
+      
+      if (newValue < 0) newValue = 0; // Prevent negative quantity
+      
+      input.value = newValue;
+      validateQuantityInput(input); 
+  }
+
+  function validateQuantityInput(input) {
+      let value = parseInt(input.value);
+      if (isNaN(value) || value < 0) {
+          input.value = 0;
+      } else {
+          input.value = value;
+      }
+  }
+
+  // --- PURCHASE ORDER FORM LOGIC (PO) ---
+
+  function openPOForm() {
+    poModal.classList.remove('hidden');
+    poMessageArea.style.display = 'none';
+    poForm.reset();
+    materialSearchInputPO.value = '';
+    
+    loadMaterials(materials => {
+        renderMaterials(materials, 'po');
+        filterMaterials('po');
+    });
+  }
+  
+  function closePOForm() {
+    poModal.classList.add('hidden');
+  }
+  
+  function handleSubmitPO() {
+    // ... (logic remains the same for PO) ...
+    poMessageArea.style.display = 'none';
+    
+    const vendorPoId = document.getElementById('vendor-po-id').value.trim();
+    const poDateStr = document.getElementById('po-date').value;
+    const despatchDateStr = document.getElementById('despatch-date').value;
+    const invoiceNumber = document.getElementById('invoice-number').value.trim();
+    
+    // --- 1. Basic Field Validation ---
+    if (!vendorPoId || !poDateStr) { 
+      showMessage("Please fill in the required fields (Vendor PO ID and PO Date).", false, poMessageArea);
+      return;
+    }
+
+    // --- 2. Date Validation (Despatch Date vs PO Date) ---
+    if (despatchDateStr) {
+        const poDate = new Date(poDateStr);
+        const despatchDate = new Date(despatchDateStr);
+        
+        poDate.setHours(0,0,0,0);
+        despatchDate.setHours(0,0,0,0);
+
+        if (despatchDate < poDate) {
+            showMessage("Validation Error: Despatch Date cannot be before the PO Date.", false, poMessageArea);
+            return;
+        }
+    }
+    
+    // --- 3. Material Quantity Collection & Validation ---
+    const materialQuantities = {};
+    let totalItems = 0;
+    
+    document.querySelectorAll('#material-list-body-po input[type="number"]').forEach(input => {
+        const matId = input.getAttribute('data-material-id');
+        const qty = parseInt(input.value) || 0;
+
+        if (qty > 0) {
+            materialQuantities[matId] = qty;
+            totalItems += qty;
+        }
+    });
+
+    if (totalItems === 0) {
+        showMessage("Validation Error: The total number of items must be greater than 0.", false, poMessageArea);
+        return;
+    }
+
+    // --- 4. Prepare Data and Submit to Backend ---
+    const poData = {
+        poId: vendorPoId, 
+        poDate: poDateStr, 
+        despatchDate: despatchDateStr,
+        invoiceNumber: invoiceNumber,
+        materials: materialQuantities
+    };
+    
+    toggleLoading(true, 'po');
+
+    google.script.run
+      .withSuccessHandler(result => {
+        toggleLoading(false, 'po');
+        if (result.success) {
+          showMessage(result.message, true, poMessageArea);
+          setTimeout(() => {
+              closePOForm();
+              poForm.reset();
+              loadSalesData();
+          }, 1500); 
+        } else {
+          showMessage(result.message, false, poMessageArea);
+        }
+      })
+      .withFailureHandler(error => {
+        toggleLoading(false, 'po');
+        showMessage(`Server Error during submission: ${error}`, false, poMessageArea);
+      })
+      .addPurchaseOrder(poData);
+  }
+
+
+  // --- SALES ORDER FORM LOGIC (ADD/EDIT) ---
+
+  /**
+   * Sets up the Sales PO modal for either ADD or EDIT mode.
+   * @param {boolean} isEdit If true, sets up for edit mode.
+   * @param {object} poData The sales order data object for editing.
+   */
+  function setupSalesPOForm(isEdit, poData = {}) {
+      salesPOMessageArea.style.display = 'none';
+      salesPOForm.reset();
+      materialSearchInputSales.value = ''; 
+      
+      const disabledFields = [customerPoIdInput, salesPoDateInput];
+      
+      // 1. Set Mode and Title
+      if (isEdit) {
+          currentEditingInternalId = poData.internalId;
+          salesModalTitle.textContent = `Edit Sales Order: ${poData.poNumber}`;
+          salesSubmitBtn.textContent = 'Update Sale';
+      } else {
+          currentEditingInternalId = null;
+          salesModalTitle.textContent = 'New Sales Order Entry';
+          salesSubmitBtn.textContent = 'Submit Sale';
+      }
+
+      // 2. Load Materials and Render
+      loadMaterials(materials => {
+          // Pass rawItemDetails for pre-filling/displaying existing items
+          const initialQuantities = isEdit ? poData.rawItemDetails : {};
+          renderMaterials(materials, 'sales', initialQuantities);
+          filterMaterials('sales');
+      });
+
+      // 3. Apply field restrictions and set values
+      disabledFields.forEach(input => {
+          input.disabled = isEdit;
+          input.classList.toggle('disabled-input', isEdit);
+      });
+
+      // 4. Populate data (if editing)
+      if (isEdit) {
+          customerPoIdInput.value = poData.poNumber || '';
+          salesPoDateInput.value = poData.rawDateOfPO || '';
+          
+          // Editable fields
+          appointmentDateInput.value = poData.rawAppointmentDate || ''; 
+          salesInvoiceNumberInput.value = poData.invoiceNumber || '';
+          
+          // Hide search bar when editing
+          materialSearchInputSales.classList.add('hidden');
+      } else {
+          // Ensure search bar is visible when adding
+          materialSearchInputSales.classList.remove('hidden');
+      }
+
+      salesPOModal.classList.remove('hidden');
+  }
+
+  /**
+   * Opens the Sales PO form modal for ADDITION.
+   */
+  function openSalesPOForm() {
+      setupSalesPOForm(false);
+  }
+
+  /**
+   * Opens the Sales PO form modal for EDITING.
+   * @param {string} encodedPO The URL-encoded JSON string of the Sales PO object.
+   */
+  function openEditSalesPOForm(encodedPO) {
+      try {
+          const poData = JSON.parse(decodeURIComponent(encodedPO));
+          setupSalesPOForm(true, poData);
+      } catch (e) {
+          showMessage("Error loading PO data for edit.", false, dataMessageArea);
+      }
+  }
+  
+  /**
+   * Closes the Sales PO form modal.
+   */
+  function closeSalesPOForm() {
+    salesPOModal.classList.add('hidden');
+  }
+
+  /**
+   * Handles Sales PO form submission (both Add and Update).
+   */
+  function handleSubmitSalesPO() {
+    salesPOMessageArea.style.display = 'none';
+    
+    // Editable fields
+    const appointmentDateStr = appointmentDateInput.value;
+    const salesInvoiceNumber = salesInvoiceNumberInput.value.trim();
+    
+    // Mandatory fields (used for validation regardless of edit status)
+    const customerPoId = customerPoIdInput.value.trim();
+    const poDateStr = salesPoDateInput.value;
+
+    // --- 1. Basic Field Validation ---
+    if (!customerPoId || !poDateStr) { 
+        // Should only happen in Add Mode, but good for safety
+        showMessage("Please fill in the required fields (Customer PO ID and Date of PO).", false, salesPOMessageArea);
+        return;
+    }
+
+    // --- 2. Date Validation (Appointment Date vs PO Date) ---
+    if (appointmentDateStr) {
+        const poDate = new Date(poDateStr);
+        const appointmentDate = new Date(appointmentDateStr);
+        
+        poDate.setHours(0,0,0,0);
+        appointmentDate.setHours(0,0,0,0);
+
+        if (appointmentDate < poDate) {
+            showMessage("Validation Error: Appointment Date cannot be before the Date of PO.", false, salesPOMessageArea);
+            return;
+        }
+    }
+    
+    // --- 3. Branch for ADD vs UPDATE ---
+    let callFunction;
+    let payload;
+    let successMessage;
+
+    if (currentEditingInternalId) {
+        // UPDATE MODE
+        callFunction = 'updateSalesOrder';
+        payload = {
+            internalId: currentEditingInternalId,
+            appointmentDate: appointmentDateStr,
+            invoiceNumber: salesInvoiceNumber
+        };
+        successMessage = `Sales Order ${currentEditingInternalId} updated successfully.`;
+    } else {
+        // ADD MODE (Need material quantities)
+        
+        const materialQuantities = {};
+        let totalItems = 0;
+        
+        document.querySelectorAll('#material-list-body-sales input[type="number"]').forEach(input => {
+            const matId = input.getAttribute('data-material-id');
+            const qty = parseInt(input.value) || 0;
+
+            if (qty > 0) {
+                materialQuantities[matId] = qty;
+                totalItems += qty;
+            }
+        });
+
+        if (totalItems === 0) {
+            showMessage("Validation Error: The total number of items must be greater than 0.", false, salesPOMessageArea);
+            return;
+        }
+        
+        callFunction = 'addSalesOrder';
+        payload = {
+            customerPoId: customerPoId, 
+            invoiceNumber: salesInvoiceNumber,
+            poDate: poDateStr, 
+            appointmentDate: appointmentDateStr,
+            materials: materialQuantities
+        };
+        successMessage = `New Sales Order ${customerPoId} submitted successfully.`;
+    }
+    
+    toggleLoading(true, 'sales');
+
+    google.script.run
+      .withSuccessHandler(result => {
+        toggleLoading(false, 'sales');
+        if (result.success) {
+          showMessage(result.message || successMessage, true, salesPOMessageArea);
+          setTimeout(() => {
+              closeSalesPOForm();
+              salesPOForm.reset();
+              loadSalesData(); // Refresh sales dashboard
+          }, 1500); 
+        } else {
+          showMessage(result.message, false, salesPOMessageArea);
+        }
+      })
+      .withFailureHandler(error => {
+        toggleLoading(false, 'sales');
+        showMessage(`Server Error during submission/update: ${error}`, false, salesPOMessageArea);
+      })
+      [callFunction](payload); // Dynamically call addSalesOrder or updateSalesOrder
+  }
+
+  // Initialize the session check on page load
+  document.addEventListener('DOMContentLoaded', checkSession);
+
+</script>
+</body>
+</html>
