@@ -24,7 +24,10 @@ function getSheetByName(sheetName) {
     } else if (sheetName === MATERIAL_SHEET_NAME) {
       sheet.getRange(1, 1, 1, 2).setValues([['Product ID', 'Product Name']]);
     } else if (sheetName === SALES_SHEET_NAME) {
-      sheet.getRange(1, 1, 1, 5).setValues([['Sale ID', 'Sale PO Number', 'Date of PO', 'Appointment Date', 'Invoice Number']]);
+      sheet.getRange(1, 1, 1, 10).setValues([[[
+        'Sale ID', 'Sale PO Number', 'Date of PO', 'Appointment Date', 'Invoice Number',
+        'Vendor ID', 'PO Link', 'Invoice Link', 'EWay Link'
+      ]]);
     } else if (sheetName === PO_SHEET_NAME) {
       // Purchase headers are set to a minimum here (A to E)
       sheet.getRange(1, 1, 1, 5).setValues([['Internal PO ID', 'Vendor PO ID', 'PO Date', 'Despatch Date', 'Invoice Number']]);
@@ -34,6 +37,8 @@ function getSheetByName(sheetName) {
     } else if (sheetName === DATA_SHEET_NAME) {
       // Data sheet: first column is label ('Metric'), material headers start from column B
       sheet.getRange(1, 1, 1, 1).setValues([['Metric']]);
+    } else if (sheetName === VENDOR_SHEET_NAME) {
+      sheet.getRange(1, 1, 1, 2).setValues([['Vendor ID', 'Vendor Name']]);
     }
   }
   return sheet;

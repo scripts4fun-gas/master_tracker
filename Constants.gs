@@ -15,13 +15,23 @@ const PO_COL_INVOICE = 4;         // Invoice Number (Column E)
 const PO_COL_FIRST_MATERIAL = 5;  // Start of material quantities (Column F onwards)
 
 // --- SALES ORDER COLUMN INDICES (0-based) ---
-// NEW ORDER: Internal ID, PO Number, Date of PO, Appointment Date, Invoice, First Material
+// Internal ID, PO Number, Date of PO, Appointment Date, Invoice, VendorId, PO Link, Invoice Link, EWay Link, First Material
 const SALES_COL_INTERNAL_ID = 0;      // Column A
 const SALES_COL_PO_NUMBER = 1;        // Column B
-const SALES_COL_DATE_PO = 2;          // Column C: Date of PO (Shifted from 3)
-const SALES_COL_APPOINTMENT_DATE = 3; // Column D: Appointment Date (Shifted from 4)
-const SALES_COL_INVOICE = 4;          // Column E: Invoice Number (Shifted from 2)
-const SALES_COL_FIRST_MATERIAL = 5;   // Column F: Start of material quantities (Shifted from 5)
+const SALES_COL_DATE_PO = 2;          // Column C: Date of PO
+const SALES_COL_APPOINTMENT_DATE = 3; // Column D: Appointment Date
+const SALES_COL_INVOICE = 4;          // Column E: Invoice Number
+const SALES_COL_VENDOR_ID = 5;        // Column F: Vendor ID (NEW)
+const SALES_COL_PO_LINK = 6;          // Column G: PO Link (NEW)
+const SALES_COL_INV_LINK = 7;         // Column H: Invoice Link (NEW)
+const SALES_COL_EWAY_LINK = 8;        // Column I: EWay Link (NEW)
+const SALES_COL_FIRST_MATERIAL = 9;   // Column J: Start of material quantities
+
+// --- GOOGLE DRIVE PARENT FOLDER ID ---
+const PARENT_FOLDER_ID = '1u-kJQ98zjDaRVijEZuCeqtB8SKzsf8b4';
+
+// New: top-level subfolder name used for Sales uploads (under PARENT_FOLDER_ID)
+const SALE_FOLDER = 'Sales';
 
 // --- MATERIAL COLUMN INDICES (0-based) ---
 const MATERIAL_COL_ID = 0;
@@ -34,7 +44,6 @@ const OTP_COL_OTP = 2;
 
 // --- MANUAL STOCK SHEET CONSTANTS (0-based) ---
 // Internal ID, Timestamp column and start of material quantities for Manual sheet
-const MANUAL_SHEET_NAME = 'Manual';            // Added for manual stock entries
 const MANUAL_COL_INTERNAL_ID = 0;              // Column A: Internal Manual ID (M001...)
 const MANUAL_COL_TIMESTAMP = 1;                // Column B: Timestamp of manual entry
 const MANUAL_COL_FIRST_MATERIAL = 2;           // Column C onwards: Material quantities
@@ -43,3 +52,8 @@ const MANUAL_COL_FIRST_MATERIAL = 2;           // Column C onwards: Material qua
 // Data sheet holds material headers starting from second column (Column B)
 const DATA_SHEET_NAME = 'Data';
 const DATA_COL_FIRST_MATERIAL = 1; // Column B onwards contain material IDs/values
+
+// --- VENDOR SHEET CONSTANTS (0-based) ---
+const VENDOR_SHEET_NAME = 'Vendor';
+const VENDOR_COL_ID = 0;    // Column A: Vendor ID
+const VENDOR_COL_NAME = 1;  // Column B: Vendor Name

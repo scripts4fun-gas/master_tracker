@@ -112,62 +112,76 @@ function addPurchaseOrder(poData) {
 function addSalesOrder(salesData) {
   try {
     const salesSheet = getSheetByName(SALES_SHEET_NAME);
-    
-    // 0. Ensure Headers
     ensureMaterialHeadersExist(salesSheet, SALES_COL_FIRST_MATERIAL);
-    
-    // --- 1. Internal Sale ID Generation (Based on Column A: SALES_COL_INTERNAL_ID) ---
+
+    // --- 1. Internal Sale ID Generation ---
     let nextSaleNumber = 1;
     if (salesSheet.getLastRow() > 1) {
-        const numRows = salesSheet.getLastRow() - 1;
-        // Read all existing internal Sale IDs from the sheet (Column A, index SALES_COL_INTERNAL_ID + 1)
-        const saleIds = salesSheet.getRange(2, SALES_COL_INTERNAL_ID + 1, numRows, 1).getValues().map(row => row[0].toString().trim());
-        
-        const maxNumber = saleIds.reduce((max, id) => {
-            const match = id.match(/^S(\d+)$/); // Assuming 'S' prefix for Sales
-            if (match) {
-                const currentNum = parseInt(match[1], 10);
-                return Math.max(max, currentNum);
-            }
-            return max;
-        }, 0);
-        
-        nextSaleNumber = maxNumber + 1;
+      const numRows = salesSheet.getLastRow() - 1;
+      const saleIds = salesSheet.getRange(2, SALES_COL_INTERNAL_ID + 1, numRows, 1).getValues().map(row => row[0].toString().trim());
+      const maxNumber = saleIds.reduce((max, id) => {
+        const match = id.match(/^S(\d+)$/);
+        if (match) {
+          const currentNum = parseInt(match[1], 10);
+          return Math.max(max, currentNum);
+        }
+        return max;
+      }, 0);
+      nextSaleNumber = maxNumber + 1;
     }
     const newInternalSaleId = `S${('000' + nextSaleNumber).slice(-3)}`;
-    // --- End Sale ID Generation ---
 
-    // 2. Prepare Data Row
-    
-    // Get the final list of material headers from the sheet to match column order
+    // --- 2. Prepare Data Row ---
     const finalHeaders = salesSheet.getRange(1, SALES_COL_FIRST_MATERIAL + 1, 1, salesSheet.getLastColumn() - SALES_COL_FIRST_MATERIAL).getValues()[0].map(h => h.toString().trim());
-
-    // Create a row template large enough for all columns
     const numColumns = salesSheet.getLastColumn();
-    const newRow = new Array(numColumns).fill(''); 
+    const newRow = new Array(numColumns).fill('');
 
-    // Insert fixed fields using NEW constants based on the user's requested order:
-    // A: 0, B: 1, C: 2 (Date), D: 3 (Appt Date), E: 4 (Invoice)
-    newRow[SALES_COL_INTERNAL_ID] = newInternalSaleId;         // Column A: 0
-    newRow[SALES_COL_PO_NUMBER] = salesData.customerPoId;      // Column B: 1
-    newRow[SALES_COL_DATE_PO] = salesData.poDate ? new Date(salesData.poDate) : '';         // Column C: 2 (Date of PO)
-    newRow[SALES_COL_APPOINTMENT_DATE] = salesData.appointmentDate ? new Date(salesData.appointmentDate) : ''; // Column D: 3 (Appointment Date)
-    newRow[SALES_COL_INVOICE] = salesData.invoiceNumber;      // Column E: 4 (Invoice Number)
-    
-    // Insert material quantities starting from SALES_COL_FIRST_MATERIAL
+    // Insert fixed fields
+    newRow[SALES_COL_INTERNAL_ID] = newInternalSaleId;
+    newRow[SALES_COL_PO_NUMBER] = salesData.customerPoId;
+    newRow[SALES_COL_DATE_PO] = salesData.poDate ? new Date(salesData.poDate) : '';
+    newRow[SALES_COL_APPOINTMENT_DATE] = salesData.appointmentDate ? new Date(salesData.appointmentDate) : '';
+    newRow[SALES_COL_INVOICE] = salesData.invoiceNumber;
+    newRow[SALES_COL_VENDOR_ID] = salesData.vendorId || '';
+
+    // --- 3. Handle file uploads ---
+    let poLink = '', invLink = '', ewayLink = '';
+    if (salesData.filesMeta && salesData.filesMeta.length > 0) {
+      // safe SALE_FOLDER fallback
+      const saleFolderName = (typeof SALE_FOLDER !== 'undefined' && SALE_FOLDER) ? SALE_FOLDER : 'SalesInternal';
+
+      // Folder path: SALES folder -> YYYY/MM/DD/<PO_NUMBER>
+      const dateObj = salesData.poDate ? new Date(salesData.poDate) : new Date();
+      const yyyy = dateObj.getFullYear();
+      const mm = ('0' + (dateObj.getMonth() + 1)).slice(-2);
+      const dd = ('0' + dateObj.getDate()).slice(-2);
+
+      // Use customerPoId (assumed valid) and sanitize for folder name
+      const rawPo = salesData.customerPoId.toString().trim();
+      const safePo = rawPo.replace(/[\\\/:\*\?"<>\|]/g, '_');
+
+      const subPath = `${saleFolderName}/${yyyy}/${mm}/${dd}/${safePo}`; // include PO number folder
+      const urls = uploadFilesToDrive(PARENT_FOLDER_ID, subPath, salesData.filesMeta);
+      // Order: [PO, Invoice, EWay]
+      poLink = urls[0] || '';
+      invLink = urls[1] || '';
+      ewayLink = urls[2] || '';
+    }
+    newRow[SALES_COL_PO_LINK] = poLink;
+    newRow[SALES_COL_INV_LINK] = invLink;
+    newRow[SALES_COL_EWAY_LINK] = ewayLink;
+
+    // --- 4. Material Quantities ---
     finalHeaders.forEach((matId, index) => {
-        const quantity = salesData.materials[matId] || 0;
-        // Check if matId exists in submitted data and is > 0
-        if (quantity > 0) {
-            newRow[SALES_COL_FIRST_MATERIAL + index] = quantity;
-        }
+      const quantity = salesData.materials[matId] || 0;
+      if (quantity > 0) {
+        newRow[SALES_COL_FIRST_MATERIAL + index] = quantity;
+      }
     });
-    
-    // 4. Append Data
-    salesSheet.appendRow(newRow);
-    
-    return { success: true, message: `Sales Order ${salesData.customerPoId} recorded. Internal ID: ${newInternalSaleId}.` };
 
+    salesSheet.appendRow(newRow);
+
+    return { success: true, message: `Sales Order ${salesData.customerPoId} recorded. Internal ID: ${newInternalSaleId}.` };
   } catch (e) {
     Logger.log("Error in addSalesOrder: " + e.toString());
     return { error: true, message: "Server error during Sales Order submission: " + e.toString() };
@@ -182,6 +196,12 @@ function addSalesOrder(salesData) {
  */
 function updateSalesOrder(updateData) {
   try {
+    try {
+      Logger.log('updateSalesOrder - updateData: ' + JSON.stringify(updateData));
+    } catch (e) {
+      Logger.log('updateSalesOrder - failed to stringify updateData: ' + e.toString());
+      Logger.log('updateSalesOrder - raw updateData: ' + updateData);
+    }
     const salesSheet = getSheetByName(SALES_SHEET_NAME);
     const internalId = updateData.internalId.toString().trim();
 
@@ -211,12 +231,53 @@ function updateSalesOrder(updateData) {
 
     // Appointment Date (Column D, index 3)
     const newAppointmentDate = updateData.appointmentDate ? new Date(updateData.appointmentDate) : '';
-    // Column index is 1-based, so +1
     salesSheet.getRange(rowNumberInSheet, SALES_COL_APPOINTMENT_DATE + 1).setValue(newAppointmentDate); 
 
     // Invoice Number (Column E, index 4)
     const newInvoiceNumber = updateData.invoiceNumber || '';
-    salesSheet.getRange(rowNumberInSheet, SALES_COL_INVOICE + 1).setValue(newInvoiceNumber); // Column index is 1-based, so +1
+    salesSheet.getRange(rowNumberInSheet, SALES_COL_INVOICE + 1).setValue(newInvoiceNumber);
+
+    // Vendor ID (optional)
+    if (typeof updateData.vendorId !== 'undefined' && updateData.vendorId !== null) {
+      const newVendorId = updateData.vendorId || '';
+      salesSheet.getRange(rowNumberInSheet, SALES_COL_VENDOR_ID + 1).setValue(newVendorId);
+    }
+
+    // Handle file uploads (PO, Invoice, EWay) if provided in updateData.filesMeta
+    if (updateData.filesMeta && updateData.filesMeta.length > 0) {
+      // safe SALE_FOLDER fallback
+      const saleFolderName = (typeof SALE_FOLDER !== 'undefined' && SALE_FOLDER) ? SALE_FOLDER : 'SalesInternal';
+
+      // Use PO date if available to create folder path, otherwise today
+      const dateObj = updateData.poDate ? new Date(updateData.poDate) : new Date();
+      const yyyy = dateObj.getFullYear();
+      const mm = ('0' + (dateObj.getMonth() + 1)).slice(-2);
+      const dd = ('0' + dateObj.getDate()).slice(-2);
+
+      // existingPoNumber is assumed valid; use it and sanitize for folder name
+      const existingPoNumber = allValues[rowIndexToUpdate][SALES_COL_PO_NUMBER].toString().trim();
+      const safePo = existingPoNumber.replace(/[\\\/:\*\?"<>\|]/g, '_');
+
+      const subPath = `${saleFolderName}/${yyyy}/${mm}/${dd}/${safePo}`; // include PO number folder
+
+      // uploadFilesToDrive returns an array of urls in order; caller should pass slots (null allowed)
+      const urls = uploadFilesToDrive(PARENT_FOLDER_ID, subPath, updateData.filesMeta);
+
+      // Only overwrite cells when a new non-empty URL is returned; otherwise preserve existing links
+      const newPoLink = (urls[0] && urls[0].toString().trim()) ? urls[0] : null;
+      const newInvLink = (urls[1] && urls[1].toString().trim()) ? urls[1] : null;
+      const newEwayLink = (urls[2] && urls[2].toString().trim()) ? urls[2] : null;
+
+      if (newPoLink !== null) {
+        salesSheet.getRange(rowNumberInSheet, SALES_COL_PO_LINK + 1).setValue(newPoLink);
+      }
+      if (newInvLink !== null) {
+        salesSheet.getRange(rowNumberInSheet, SALES_COL_INV_LINK + 1).setValue(newInvLink);
+      }
+      if (newEwayLink !== null) {
+        salesSheet.getRange(rowNumberInSheet, SALES_COL_EWAY_LINK + 1).setValue(newEwayLink);
+      }
+    }
 
     return { success: true, message: `Sales Order ${internalId} updated successfully.` };
 
@@ -295,6 +356,10 @@ function getSalesData() {
             appointmentDate: appointmentDate, // Display format
             rawAppointmentDate: rawAppointmentDate, // Form input format
             invoiceNumber: invoiceNumber, // NEW: For update
+            vendorId: row[SALES_COL_VENDOR_ID] || '',     // NEW: Vendor ID for form
+            poLink: row[SALES_COL_PO_LINK] || '',        // NEW: PO document URL
+            invLink: row[SALES_COL_INV_LINK] || '',      // NEW: Invoice document URL
+            ewayLink: row[SALES_COL_EWAY_LINK] || '',    // NEW: EWay document URL
             displayItemDetails: displayItemDetails.join('\n'), // For modal button click
             rawItemDetails: rawItemDetails // For edit form population
         });
@@ -548,4 +613,90 @@ function computeAndUpdateStock() {
  */
 function getCurrentStockData() {
   return computeAndUpdateStock();
+}
+
+/**
+ * Returns a list of vendors from the Material sheet or a separate Vendor sheet.
+ * For now, assumes a 'Vendor' sheet with columns: [Vendor ID, Vendor Name]
+ */
+function getVendorsForForm() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const vendorSheet = ss.getSheetByName(VENDOR_SHEET_NAME);
+  if (!vendorSheet) return [];
+  const data = vendorSheet.getDataRange().getValues();
+  const vendors = [];
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][VENDOR_COL_ID]) vendors.push({
+      id: data[i][VENDOR_COL_ID],
+      name: data[i][VENDOR_COL_NAME]
+    });
+  }
+  return vendors;
+}
+
+/**
+ * Handles file uploads and returns Drive URLs.
+ * Robust: falls back to root if getFolderById fails, preserves input order and length.
+ */
+function uploadFilesToDrive(folderId, subPath, files) {
+  // Resolve base folder with fallback to root on error
+  let folder;
+  try {
+    folder = DriveApp.getFolderById(folderId);
+  } catch (e) {
+    Logger.log('uploadFilesToDrive: getFolderById failed for id=' + folderId + ' -> ' + e.toString());
+    // Fallback: use root folder to avoid hard failure (log for user to check permissions/id)
+    try {
+      folder = DriveApp.getRootFolder();
+      Logger.log('uploadFilesToDrive: falling back to root folder.');
+    } catch (e2) {
+      Logger.log('uploadFilesToDrive: failed to access Drive root folder -> ' + e2.toString());
+      // Return placeholders matching files length (if any) to avoid throwing in callers
+      const emptyUrls = (files && files.length) ? files.map(() => '') : [];
+      return emptyUrls;
+    }
+  }
+
+  const parts = subPath.split('/').filter(Boolean);
+  for (const part of parts) {
+    let found = false;
+    const folders = folder.getFoldersByName(part);
+    if (folders.hasNext()) {
+      folder = folders.next();
+      found = true;
+    }
+    if (!found) {
+      folder = folder.createFolder(part);
+    }
+  }
+
+  // Prepare result array with same length as input files (preserve order)
+  const urls = Array.isArray(files) ? new Array(files.length).fill('') : [];
+
+  if (!files || files.length === 0) return urls;
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    if (!file) {
+      urls[i] = ''; // preserve position for missing files
+      continue;
+    }
+    try {
+      let blob;
+      if (typeof file.bytes === 'string') {
+        // file.bytes is base64 string
+        const decoded = Utilities.base64Decode(file.bytes);
+        blob = Utilities.newBlob(decoded, file.mimeType || 'application/octet-stream', file.name);
+      } else {
+        // assume raw bytes (array) or already blob-compatible
+        blob = Utilities.newBlob(file.bytes, file.mimeType || 'application/octet-stream', file.name);
+      }
+      const driveFile = folder.createFile(blob);
+      urls[i] = driveFile.getUrl();
+    } catch (e) {
+      Logger.log(`uploadFilesToDrive: failed to upload file index ${i} name=${file && file.name} -> ${e.toString()}`);
+      urls[i] = ''; // on error keep placeholder to preserve order
+    }
+  }
+  return urls;
 }

@@ -110,6 +110,7 @@
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date of PO</th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Appointment Date</th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Documents</th>
           </tr>
         </thead>
         <tbody id="sales-po-body" class="bg-white divide-y divide-gray-200">
@@ -254,6 +255,28 @@
                     <label for="sales-invoice-number" class="block text-sm font-medium text-gray-700 mb-1">Invoice Number</label>
                     <input type="text" id="sales-invoice-number" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="Optional">
                 </div>
+
+                <!-- Vendor Select (NEW) -->
+                <div>
+                    <label for="sales-vendor-id" class="block text-sm font-medium text-gray-700 mb-1">Vendor <span class="text-red-500">*</span></label>
+                    <select id="sales-vendor-id" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"></select>
+                </div>
+            </div>
+
+            <!-- Upload Buttons (NEW) -->
+            <div class="flex flex-wrap gap-4 mb-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">PO Document</label>
+                    <input type="file" id="sales-po-file" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-500 focus:ring-opacity-50"/>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Invoice Document</label>
+                    <input type="file" id="sales-invoice-file" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-500 focus:ring-opacity-50"/>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">EWayBill Document</label>
+                    <input type="file" id="sales-eway-file" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-500 focus:ring-opacity-50"/>
+                </div>
             </div>
 
             <!-- Material Selection Table -->
@@ -377,6 +400,42 @@
   const dashboardContainer = document.getElementById('dashboard-container');
   const salesPOBody = document.getElementById('sales-po-body');
   const dataMessageArea = document.getElementById('data-message-area');
+
+  // Form / Modal DOM references (added to avoid ReferenceError)
+  // Purchase PO
+  const poModal = document.getElementById('po-modal');
+  const poForm = document.getElementById('po-form');
+  const poMessageArea = document.getElementById('po-message-area');
+  const materialListBodyPO = document.getElementById('material-list-body-po');
+  const materialSearchInputPO = document.getElementById('material-search-po');
+
+  // Sales PO
+  const salesPOModal = document.getElementById('sales-po-modal');
+  const salesModalTitle = document.getElementById('sales-modal-title');
+  const salesPOForm = document.getElementById('sales-po-form');
+  const salesPOMessageArea = document.getElementById('sales-po-message-area');
+  const materialListBodySales = document.getElementById('material-list-body-sales');
+  const materialSearchInputSales = document.getElementById('material-search-sales');
+
+  // Sales form specific inputs
+  const customerPoIdInput = document.getElementById('customer-po-id');
+  const salesPoDateInput = document.getElementById('sales-po-date');
+  const appointmentDateInput = document.getElementById('appointment-date');
+  const salesInvoiceNumberInput = document.getElementById('sales-invoice-number');
+  const salesSubmitBtn = document.getElementById('sales-po-submit-btn');
+
+  // Manual Stock
+  const manualStockModal = document.getElementById('manual-stock-modal');
+  const manualForm = document.getElementById('manual-form');
+  const manualMessageArea = document.getElementById('manual-message-area');
+  const materialListBodyManual = document.getElementById('material-list-body-manual');
+  const materialSearchInputManual = document.getElementById('material-search-manual');
+  const manualSubmitBtn = document.getElementById('manual-submit-btn');
+
+  // Item Details Modal (ADDED)
+  const itemDetailsModal = document.getElementById('item-details-modal');
+  const itemDetailsTitle = document.getElementById('item-details-title');
+  const itemDetailsBody = document.getElementById('item-details-body');
 
   // New: Stock table body reference
   const stockBody = document.getElementById('stock-body');
@@ -594,6 +653,13 @@
                       onclick="openItemDetailsModal('${po.poNumber}', '${encodedDetails}')">
                   View Items
               </button>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              <div class="flex items-center space-x-2">
+                ${po.poLink ? `<a href="${po.poLink}" target="_blank" class="text-indigo-600 hover:text-indigo-800 font-semibold text-xs py-1 px-3 rounded-full bg-indigo-100">PO</a>` : ''}
+                ${po.invLink ? `<a href="${po.invLink}" target="_blank" class="text-indigo-600 hover:text-indigo-800 font-semibold text-xs py-1 px-3 rounded-full bg-indigo-100">Inv</a>` : ''}
+                ${po.ewayLink ? `<a href="${po.ewayLink}" target="_blank" class="text-indigo-600 hover:text-indigo-800 font-semibold text-xs py-1 px-3 rounded-full bg-indigo-100">EWay</a>` : ''}
+              </div>
             </td>
           `;
           salesPOBody.appendChild(row);
@@ -888,59 +954,178 @@
   // --- SALES ORDER FORM LOGIC (ADD/EDIT) ---
 
   /**
+   * Populates the vendor dropdown and sets its state based on edit mode.
+   * @param {string} selectedId Optional. The vendor ID to pre-select (for editing).
+   */
+  // Populate vendor dropdown. Accept optional selectedId to set value (used in edit mode).
+  function loadVendors(selectedId = '') {
+    google.script.run.withSuccessHandler(vendors => {
+      salesVendorIdInput.innerHTML = vendors.map(v => `<option value="${v.id}">${v.name}</option>`).join('');
+      if (selectedId) {
+        // If the provided vendor exists in list, set it; otherwise keep as-is
+        const opt = Array.from(salesVendorIdInput.options).find(o => o.value == selectedId);
+        if (opt) salesVendorIdInput.value = selectedId;
+        // Disable in edit mode (currentEditingInternalId controls edit mode)
+        const isEdit = currentEditingInternalId !== null;
+        salesVendorIdInput.disabled = isEdit;
+        salesVendorIdInput.classList.toggle('disabled-input', isEdit);
+      }
+    }).getVendorsForForm();
+  }
+
+  // Helper: derive a friendly filename from a Drive URL or full path
+  function getFilenameFromUrl(url) {
+    if (!url) return '';
+    try {
+      // If it's a Drive url with /file/d/<id>/view or similar, try to parse last segment fallback
+      const parts = url.split('/');
+      // find a segment that looks like a filename (last non-empty)
+      for (let i = parts.length - 1; i >= 0; i--) {
+        const seg = parts[i];
+        if (seg && !/^(view|edit|usp|file|d)$/.test(seg)) {
+          // decode any URL encoded part
+          return decodeURIComponent(seg).replace(/\?.*$/, '');
+        }
+      }
+      return url;
+    } catch (e) {
+      return url;
+    }
+  }
+
+  // Show uploaded file link/label next to an <input type="file"> and disable input
+  function showUploadedFile(inputElem, fileUrl, labelSuffix) {
+    // remove any previous label
+    clearUploadedFileLabel(inputElem);
+
+    if (!inputElem) return;
+    if (fileUrl) {
+      inputElem.disabled = true;
+      inputElem.classList.add('disabled-input');
+
+      const filename = getFilenameFromUrl(fileUrl) || 'Document';
+      const label = document.createElement('div');
+      label.id = `${inputElem.id}-label`;
+      label.className = 'text-xs text-gray-600 mt-1';
+      label.innerHTML = `<a href="${fileUrl}" target="_blank" class="text-indigo-600 hover:text-indigo-800">${filename}</a>`;
+      // insert after input
+      inputElem.parentNode.appendChild(label);
+    } else {
+      inputElem.disabled = false;
+      inputElem.classList.remove('disabled-input');
+    }
+  }
+
+  function clearUploadedFileLabel(inputElem) {
+    const existing = document.getElementById(`${inputElem.id}-label`);
+    if (existing) existing.remove();
+    if (inputElem) {
+      inputElem.disabled = false;
+      inputElem.classList.remove('disabled-input');
+      // clear file selection if any (safe)
+      try { inputElem.value = ''; } catch (e) {}
+    }
+  }
+
+  /**
    * Sets up the Sales PO modal for either ADD or EDIT mode.
    * @param {boolean} isEdit If true, sets up for edit mode.
    * @param {object} poData The sales order data object for editing.
    */
   function setupSalesPOForm(isEdit, poData = {}) {
+    console.log('setupSalesPOForm START', { isEdit, poData });
+    try {
+      console.log('Hiding message area and resetting form');
       salesPOMessageArea.style.display = 'none';
       salesPOForm.reset();
-      materialSearchInputSales.value = ''; 
-      
+      materialSearchInputSales.value = '';
+
       const disabledFields = [customerPoIdInput, salesPoDateInput];
-      
+      console.log('Disabled fields array prepared', disabledFields);
+
       // 1. Set Mode and Title
       if (isEdit) {
-          currentEditingInternalId = poData.internalId;
-          salesModalTitle.textContent = `Edit Sales Order: ${poData.poNumber}`;
-          salesSubmitBtn.textContent = 'Update Sale';
+        currentEditingInternalId = poData.internalId;
+        console.log('MODE: EDIT', 'currentEditingInternalId=', currentEditingInternalId);
+        salesModalTitle.textContent = `Edit Sales Order: ${poData.poNumber}`;
+        salesSubmitBtn.textContent = 'Update Sale';
       } else {
-          currentEditingInternalId = null;
-          salesModalTitle.textContent = 'New Sales Order Entry';
-          salesSubmitBtn.textContent = 'Submit Sale';
+        currentEditingInternalId = null;
+        console.log('MODE: ADD');
+        salesModalTitle.textContent = 'New Sales Order Entry';
+        salesSubmitBtn.textContent = 'Submit Sale';
       }
 
       // 2. Load Materials and Render
+      console.log('Calling loadMaterials()');
       loadMaterials(materials => {
-          // Pass rawItemDetails for pre-filling/displaying existing items
+        try {
+          console.log('loadMaterials callback invoked', { materialsCount: materials && materials.length });
           const initialQuantities = isEdit ? poData.rawItemDetails : {};
+          console.log('initialQuantities for renderMaterials:', initialQuantities);
           renderMaterials(materials, 'sales', initialQuantities);
+          console.log('renderMaterials finished, calling filterMaterials(\'sales\')');
           filterMaterials('sales');
+        } catch (cbErr) {
+          console.error('Error inside loadMaterials callback', cbErr);
+        }
       });
 
       // 3. Apply field restrictions and set values
+      console.log('Applying field restrictions to disabled fields');
       disabledFields.forEach(input => {
-          input.disabled = isEdit;
-          input.classList.toggle('disabled-input', isEdit);
+        if (!input) {
+          console.warn('Encountered undefined input in disabledFields:', input);
+          return;
+        }
+        input.disabled = isEdit;
+        input.classList.toggle('disabled-input', isEdit);
       });
 
       // 4. Populate data (if editing)
       if (isEdit) {
-          customerPoIdInput.value = poData.poNumber || '';
-          salesPoDateInput.value = poData.rawDateOfPO || '';
-          
-          // Editable fields
-          appointmentDateInput.value = poData.rawAppointmentDate || ''; 
-          salesInvoiceNumberInput.value = poData.invoiceNumber || '';
-          
-          // Hide search bar when editing
-          materialSearchInputSales.classList.add('hidden');
+        console.log('Populating form values for edit mode', poData);
+        customerPoIdInput.value = poData.poNumber || '';
+        salesPoDateInput.value = poData.rawDateOfPO || '';
+
+        // Editable fields
+        appointmentDateInput.value = poData.rawAppointmentDate || '';
+        salesInvoiceNumberInput.value = poData.invoiceNumber || '';
+
+        // Hide search bar when editing
+        console.log('Hiding material search input for edit mode');
+        materialSearchInputSales.classList.add('hidden');
+
+        // Set vendor dropdown to saved vendor and disable it
+        loadVendors(poData.vendorId || '');
+
+        // Handle uploaded files: show link and disable file inputs if already uploaded
+        showUploadedFile(salesPOFileInput, poData.poLink || '', 'po');
+        showUploadedFile(salesInvoiceFileInput, poData.invLink || '', 'inv');
+        showUploadedFile(salesEWayFileInput, poData.ewayLink || '', 'eway');
       } else {
-          // Ensure search bar is visible when adding
-          materialSearchInputSales.classList.remove('hidden');
+        console.log('Ensuring material search input visible for add mode');
+        materialSearchInputSales.classList.remove('hidden');
+
+        // Ensure vendor dropdown is loaded and enabled
+        loadVendors();
+        salesVendorIdInput.disabled = false;
+        salesVendorIdInput.classList.remove('disabled-input');
+
+        // Ensure file inputs are enabled and any labels cleared
+        clearUploadedFileLabel(salesPOFileInput);
+        clearUploadedFileLabel(salesInvoiceFileInput);
+        clearUploadedFileLabel(salesEWayFileInput);
       }
 
+      console.log('Showing sales PO modal');
       salesPOModal.classList.remove('hidden');
+
+      console.log('setupSalesPOForm END');
+    } catch (err) {
+      console.error('setupSalesPOForm ERROR', err);
+      throw err; // rethrow so caller/test can observe crash if needed
+    }
   }
 
   /**
@@ -957,6 +1142,7 @@
   function openEditSalesPOForm(encodedPO) {
       try {
           const poData = JSON.parse(decodeURIComponent(encodedPO));
+          console.log('Editing PO data:', poData);
           setupSalesPOForm(true, poData);
       } catch (e) {
           showMessage("Error loading PO data for edit.", false, dataMessageArea);
@@ -973,7 +1159,7 @@
   /**
    * Handles Sales PO form submission (both Add and Update).
    */
-  function handleSubmitSalesPO() {
+  async function handleSubmitSalesPO() {
     salesPOMessageArea.style.display = 'none';
     
     // Editable fields
@@ -1051,8 +1237,23 @@
         successMessage = `New Sales Order ${customerPoId} submitted successfully.`;
     }
     
+    // Collect vendor and file data
+    const vendorId = salesVendorIdInput.value;
+    const filesMeta = await getFilesMeta(); // implement getFilesMeta to read and encode files
+
+    // Add vendor and files to payload
+    payload.vendorId = vendorId;
+    payload.filesMeta = filesMeta;
+    
     toggleLoading(true, 'sales');
 
+    console.log('Sales payload prepared for', callFunction);
+    try {
+      console.log('Payload (stringified):', JSON.stringify(payload, null, 2));
+    } catch (err) {
+      console.warn('Could not stringify payload, dumping object instead:', err);
+      console.dir(payload);
+    }
     google.script.run
       .withSuccessHandler(result => {
         toggleLoading(false, 'sales');
@@ -1143,6 +1344,85 @@
   // Initialize the session check on page load
   document.addEventListener('DOMContentLoaded', checkSession);
 
+  // Add vendor select and file upload logic
+  const salesVendorIdInput = document.getElementById('sales-vendor-id');
+  const salesPOFileInput = document.getElementById('sales-po-file');
+  const salesInvoiceFileInput = document.getElementById('sales-invoice-file');
+  const salesEWayFileInput = document.getElementById('sales-eway-file');
+
+  // Populate vendor dropdown
+  function loadVendors(selectedId = '') {
+    google.script.run.withSuccessHandler(vendors => {
+      salesVendorIdInput.innerHTML = vendors.map(v => `<option value="${v.id}">${v.name}</option>`).join('');
+      if (selectedId) {
+        // If the provided vendor exists in list, set it; otherwise keep as-is
+        const opt = Array.from(salesVendorIdInput.options).find(o => o.value == selectedId);
+        if (opt) salesVendorIdInput.value = selectedId;
+        // Disable in edit mode (currentEditingInternalId controls edit mode)
+        const isEdit = currentEditingInternalId !== null;
+        salesVendorIdInput.disabled = isEdit;
+        salesVendorIdInput.classList.toggle('disabled-input', isEdit);
+      }
+    }).getVendorsForForm();
+  }
+
+  /**
+   * Read up to three file inputs and return metadata array in fixed order [PO, Invoice, EWay].
+   * Each element is either { name, mimeType, bytes } where bytes is base64 string, or null.
+   */
+  async function getFilesMeta() {
+    function readFileAsBase64(file) {
+      return new Promise((resolve, reject) => {
+        if (!file) return resolve(null);
+        const fr = new FileReader();
+        fr.onerror = () => reject(new Error('File read error'));
+        fr.onload = e => {
+          const dataUrl = e.target.result; // data:<mime>;base64,<data>
+          const match = dataUrl.match(/^data:(.+);base64,(.*)$/);
+          if (match) {
+            resolve({ name: file.name, mimeType: match[1], bytes: match[2] });
+          } else {
+            // fallback: encode raw string (rare)
+            const base64 = btoa(dataUrl);
+            resolve({ name: file.name, mimeType: file.type || 'application/octet-stream', bytes: base64 });
+          }
+        };
+        fr.readAsDataURL(file);
+      });
+    }
+
+    const poFile = salesPOFileInput && salesPOFileInput.files && salesPOFileInput.files[0] ? salesPOFileInput.files[0] : null;
+    const invFile = salesInvoiceFileInput && salesInvoiceFileInput.files && salesInvoiceFileInput.files[0] ? salesInvoiceFileInput.files[0] : null;
+    const ewayFile = salesEWayFileInput && salesEWayFileInput.files && salesEWayFileInput.files[0] ? salesEWayFileInput.files[0] : null;
+
+    // Read each (preserve position; null for missing)
+    const [poMeta, invMeta, ewayMeta] = await Promise.all([
+      readFileAsBase64(poFile),
+      readFileAsBase64(invFile),
+      readFileAsBase64(ewayFile)
+    ]);
+
+    return [poMeta, invMeta, ewayMeta];
+  }
+
+  // In handleSubmitSalesPO: change payload assignment to use filesMeta key
+  // Replace (near end of handleSubmitSalesPO) the two lines:
+  //   payload.vendorId = vendorId;
+  //   payload.files = filesMeta;
+  // With:
+  //   payload.vendorId = vendorId;
+  //   payload.filesMeta = filesMeta;
+
+  // Example (actual replacement in function):
+  // ...existing code inside handleSubmitSalesPO...
+  // Collect vendor and file data
+  // const vendorId = salesVendorIdInput.value;
+  // const filesMeta = await getFilesMeta(); // implemented above
+  //
+  // // Add vendor and files to payload
+  // payload.vendorId = vendorId;
+  // payload.filesMeta = filesMeta;
+  // ...existing code...
 </script>
 </body>
 </html>
