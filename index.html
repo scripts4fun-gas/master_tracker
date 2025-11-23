@@ -93,7 +93,8 @@
       <button class="btn-primary flex-1 min-w-[150px] px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600" onclick="openSalesPOForm()">
         + Add Sales PO
       </button>
-      <button class="btn-primary flex-1 min-w-[150px] px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600">
+      <!-- Manual Stock Button: wired to openManualStockForm -->
+      <button class="btn-primary flex-1 min-w-[150px] px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600" onclick="openManualStockForm()">
         + Add Manual Stock
       </button>
     </div>
@@ -271,6 +272,50 @@
     </div>
 </div>
 
+<!-- MANUAL STOCK FORM MODAL (new) -->
+<div id="manual-stock-modal" class="modal hidden">
+  <div class="modal-content w-full max-w-3xl bg-white p-6 sm:p-8 rounded-xl card relative">
+    <h2 class="text-2xl font-bold text-gray-800 mb-6">Add Manual Stock Entry</h2>
+    <button class="absolute top-4 right-4 text-gray-500 hover:text-gray-700" onclick="closeManualStockForm()">
+      <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+      </svg>
+    </button>
+
+    <form id="manual-form" onsubmit="event.preventDefault(); handleSubmitManualStock()">
+      <h3 class="text-xl font-semibold text-gray-700 mb-4">Material Quantities <span class="text-red-500">*</span></h3>
+
+      <input type="text" id="material-search-manual" onkeyup="filterMaterials('manual')" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 mb-4" placeholder="Search material by name or ID...">
+
+      <div class="overflow-y-auto max-h-72 border border-gray-200 rounded-lg">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50 sticky top-0">
+            <tr>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">ID</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-2/4">Material Name</th>
+              <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">Quantity</th>
+            </tr>
+          </thead>
+          <tbody id="material-list-body-manual" class="bg-white divide-y divide-gray-100">
+            <tr><td colspan="3" class="px-6 py-4 text-center text-gray-500">Loading materials...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div id="manual-message-area" class="mt-4 p-3 rounded-lg text-sm text-center hidden"></div>
+
+      <div class="flex justify-end mt-6 space-x-3">
+        <button type="button" class="px-4 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300" onclick="closeManualStockForm()">
+          Cancel
+        </button>
+        <button type="submit" id="manual-submit-btn" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-500 focus:ring-opacity-50">
+          Submit Manual Stock
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <!-- ITEM DETAILS MODAL -->
 <div id="item-details-modal" class="modal hidden">
     <div class="modal-content w-full max-w-lg bg-white p-6 sm:p-8 rounded-xl card relative">
@@ -320,7 +365,7 @@
   const poMessageArea = document.getElementById('po-message-area');
   const materialListBodyPO = document.getElementById('material-list-body-po'); // Specific for PO
   const materialSearchInputPO = document.getElementById('material-search-po'); // Specific for PO
-  
+
   // Sales Order Form Elements (NEW)
   const salesPOModal = document.getElementById('sales-po-modal');
   const salesModalTitle = document.getElementById('sales-modal-title');
@@ -328,6 +373,14 @@
   const salesPOMessageArea = document.getElementById('sales-po-message-area');
   const materialListBodySales = document.getElementById('material-list-body-sales'); // Specific for Sales
   const materialSearchInputSales = document.getElementById('material-search-sales'); // Specific for Sales
+
+  // Manual Stock Form Elements (NEW)
+  const manualStockModal = document.getElementById('manual-stock-modal');
+  const manualForm = document.getElementById('manual-form');
+  const manualMessageArea = document.getElementById('manual-message-area');
+  const materialListBodyManual = document.getElementById('material-list-body-manual'); // Specific for Manual Stock
+  const materialSearchInputManual = document.getElementById('material-search-manual'); // Specific for Manual Stock
+  const manualSubmitBtn = document.getElementById('manual-submit-btn');
 
   // Item Details Modal Elements
   const itemDetailsModal = document.getElementById('item-details-modal');
@@ -598,11 +651,11 @@
   /**
    * Renders the material list in the specified table body.
    * @param {Array<object>} materials The list of materials to render.
-   * @param {string} type 'po' or 'sales'
+   * @param {string} type 'po', 'sales' or 'manual'
    * @param {object} initialQuantities Map of materialId to quantity (only used in 'sales' edit mode)
    */
   function renderMaterials(materials, type, initialQuantities = {}) {
-    const targetBody = type === 'po' ? materialListBodyPO : materialListBodySales;
+    const targetBody = type === 'po' ? materialListBodyPO : (type === 'manual' ? materialListBodyManual : materialListBodySales);
     const isEditMode = type === 'sales' && currentEditingInternalId !== null;
 
     targetBody.innerHTML = '';
@@ -655,17 +708,18 @@
         targetBody.innerHTML = '<tr><td colspan="3" class="px-6 py-4 text-center text-gray-500">No materials were recorded on this order.</td></tr>';
     }
   }
-  
+
   /**
    * Filters the material table based on search input.
-   * @param {string} type 'po' or 'sales'
+   * @param {string} type 'po', 'manual' or 'sales'
    */
   function filterMaterials(type) {
       // NOTE: Filtering is disabled in Sales Edit Mode as only relevant items are shown.
       if (type === 'sales' && currentEditingInternalId !== null) return;
       
-      const filter = (type === 'po' ? materialSearchInputPO : materialSearchInputSales).value.toLowerCase().trim();
-      const rows = document.querySelectorAll(type === 'po' ? '#material-list-body-po .material-row' : '#material-list-body-sales .material-row');
+      const searchInput = (type === 'po' ? materialSearchInputPO : (type === 'manual' ? materialSearchInputManual : materialSearchInputSales));
+      const filter = searchInput.value.toLowerCase().trim();
+      const rows = document.querySelectorAll(type === 'po' ? '#material-list-body-po .material-row' : (type === 'manual' ? '#material-list-body-manual .material-row' : '#material-list-body-sales .material-row'));
       
       rows.forEach(row => {
           const id = row.getAttribute('data-material-id').toLowerCase();
@@ -678,8 +732,6 @@
           }
       });
   }
-  
-  // ... (updateQuantity and validateQuantityInput remain the same) ...
 
   function updateQuantity(matId, delta, type) {
       // Prevent modification if in Sales Edit Mode
@@ -725,7 +777,6 @@
   }
   
   function handleSubmitPO() {
-    // ... (logic remains the same for PO) ...
     poMessageArea.style.display = 'none';
     
     const vendorPoId = document.getElementById('vendor-po-id').value.trim();
@@ -992,6 +1043,71 @@
         showMessage(`Server Error during submission/update: ${error}`, false, salesPOMessageArea);
       })
       [callFunction](payload); // Dynamically call addSalesOrder or updateSalesOrder
+  }
+
+  // --- MANUAL STOCK FORM LOGIC ---
+  function openManualStockForm() {
+    manualStockModal.classList.remove('hidden');
+    manualMessageArea.style.display = 'none';
+    manualForm.reset();
+    materialSearchInputManual.value = '';
+
+    loadMaterials(materials => {
+        // Render into manual table (uses 'manual' type)
+        renderMaterials(materials, 'manual');
+        filterMaterials('manual');
+    });
+  }
+
+  function closeManualStockForm() {
+    manualStockModal.classList.add('hidden');
+  }
+
+  function handleSubmitManualStock() {
+    manualMessageArea.style.display = 'none';
+
+    const materialQuantities = {};
+    let totalItems = 0;
+
+    document.querySelectorAll('#material-list-body-manual input[type="number"]').forEach(input => {
+        const matId = input.getAttribute('data-material-id');
+        const qty = parseInt(input.value) || 0;
+
+        if (qty > 0) {
+            materialQuantities[matId] = qty;
+            totalItems += qty;
+        }
+    });
+
+    if (totalItems === 0) {
+        showMessage("Validation Error: The total number of items must be greater than 0.", false, manualMessageArea);
+        return;
+    }
+
+    const payload = {
+      materials: materialQuantities
+    };
+
+    manualSubmitBtn.disabled = true;
+    google.script.run
+      .withSuccessHandler(result => {
+        manualSubmitBtn.disabled = false;
+        if (result.success) {
+          showMessage(result.message || 'Manual stock recorded successfully.', true, manualMessageArea);
+          setTimeout(() => {
+              closeManualStockForm();
+              manualForm.reset();
+              loadSalesData(); // refresh dashboard if needed
+          }, 1200);
+        } else {
+          showMessage(result.message, false, manualMessageArea);
+        }
+      })
+      .withFailureHandler(error => {
+        manualSubmitBtn.disabled = false;
+        showMessage(`Server Error during manual stock submission: ${error}`, false, manualMessageArea);
+      })
+      .addManualStock(payload);
   }
 
   // Initialize the session check on page load

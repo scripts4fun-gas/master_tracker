@@ -354,3 +354,68 @@ function getMaterialMap() {
     }
     return productMap;
 }
+
+/**
+ * Inserts a manual stock entry into the Manual sheet.
+ * Mirrors the addPurchaseOrder structure: generates an internal ID (M001...), writes timestamp and material quantities.
+ * Expects manualData = { materials: { "<matId>": <qty>, ... } }
+ * Returns { success: true, message: '...' } or { error: true, message: '...' }.
+ */
+function addManualStock(manualData) {
+  try {
+    const manualSheet = getSheetByName(MANUAL_SHEET_NAME);
+
+    // 0. Ensure Headers (append any new material IDs)
+    ensureMaterialHeadersExist(manualSheet, MANUAL_COL_FIRST_MATERIAL);
+
+    // --- 1. Internal Manual ID Generation (Based on Column A: MANUAL_COL_INTERNAL_ID) ---
+    let nextManualNumber = 1;
+    if (manualSheet.getLastRow() > 1) {
+      const numRows = manualSheet.getLastRow() - 1;
+      const ids = manualSheet.getRange(2, MANUAL_COL_INTERNAL_ID + 1, numRows, 1).getValues().map(row => row[0].toString().trim());
+      const maxNumber = ids.reduce((max, id) => {
+        const match = id.match(/^M(\d+)$/);
+        if (match) {
+          const currentNum = parseInt(match[1], 10);
+          return Math.max(max, currentNum);
+        }
+        return max;
+      }, 0);
+      nextManualNumber = maxNumber + 1;
+    }
+    const newInternalManualId = `M${('000' + nextManualNumber).slice(-3)}`;
+    // --- End Manual ID Generation ---
+
+    // 2. Prepare Data Row
+    // Get the final list of material headers from the sheet to match column order
+    const lastCol = manualSheet.getLastColumn();
+    const materialColsCount = Math.max(0, lastCol - MANUAL_COL_FIRST_MATERIAL);
+    const finalHeaders = materialColsCount > 0
+      ? manualSheet.getRange(1, MANUAL_COL_FIRST_MATERIAL + 1, 1, materialColsCount).getValues()[0].map(h => h.toString().trim())
+      : [];
+
+    // Create a row template large enough for all columns
+    const numColumns = Math.max(lastCol, MANUAL_COL_FIRST_MATERIAL);
+    const newRow = new Array(numColumns).fill('');
+
+    // Insert fixed fields
+    newRow[MANUAL_COL_INTERNAL_ID] = newInternalManualId; // Column A: Internal Manual ID
+    newRow[MANUAL_COL_TIMESTAMP] = new Date();            // Column B: Timestamp
+
+    // Insert material quantities starting from MANUAL_COL_FIRST_MATERIAL
+    finalHeaders.forEach((matId, index) => {
+      const quantity = manualData.materials && manualData.materials[matId] ? manualData.materials[matId] : 0;
+      if (quantity > 0) {
+        newRow[MANUAL_COL_FIRST_MATERIAL + index] = quantity;
+      }
+    });
+
+    // 4. Append Data
+    manualSheet.appendRow(newRow);
+
+    return { success: true, message: `Manual stock recorded. Internal ID: ${newInternalManualId}.` };
+  } catch (e) {
+    Logger.log("Error in addManualStock: " + e.toString());
+    return { error: true, message: "Server error during manual stock submission: " + e.toString() };
+  }
+}

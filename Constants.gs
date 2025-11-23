@@ -3,6 +3,7 @@ const PO_SHEET_NAME = 'Purchase'; // Changed from 'PurchaseOrders'
 const SALES_SHEET_NAME = 'Sales'; // Changed from 'SalesOrders'
 const MATERIAL_SHEET_NAME = 'Material'; // Changed from 'Materials'
 const OTP_SHEET_NAME = 'OTPs'; // Added for consistency
+const MANUAL_SHEET_NAME = 'Manual'; // Added for manual stock entries
 
 // --- PURCHASE ORDER COLUMN INDICES (0-based) ---
 // Note: This structure now supports two PO ID columns.
@@ -30,3 +31,10 @@ const MATERIAL_COL_NAME = 1;
 const OTP_COL_EMAIL = 0;
 const OTP_COL_DATE = 1;
 const OTP_COL_OTP = 2;
+
+// --- MANUAL STOCK SHEET CONSTANTS (0-based) ---
+// Internal ID, Timestamp column and start of material quantities for Manual sheet
+const MANUAL_SHEET_NAME = 'Manual';            // Added for manual stock entries
+const MANUAL_COL_INTERNAL_ID = 0;              // Column A: Internal Manual ID (M001...)
+const MANUAL_COL_TIMESTAMP = 1;                // Column B: Timestamp of manual entry
+const MANUAL_COL_FIRST_MATERIAL = 2;           // Column C onwards: Material quantities

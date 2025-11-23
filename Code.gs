@@ -24,10 +24,13 @@ function getSheetByName(sheetName) {
     } else if (sheetName === MATERIAL_SHEET_NAME) {
       sheet.getRange(1, 1, 1, 2).setValues([['Product ID', 'Product Name']]);
     } else if (sheetName === SALES_SHEET_NAME) {
-      sheet.getRange(1, 1, 1, 4).setValues([['Sale ID', 'Sale PO Number', 'Date of PO', 'Appointment Date']]);
+      sheet.getRange(1, 1, 1, 5).setValues([['Sale ID', 'Sale PO Number', 'Date of PO', 'Appointment Date', 'Invoice Number']]);
     } else if (sheetName === PO_SHEET_NAME) {
       // Purchase headers are set to a minimum here (A to E)
       sheet.getRange(1, 1, 1, 5).setValues([['Internal PO ID', 'Vendor PO ID', 'PO Date', 'Despatch Date', 'Invoice Number']]);
+    } else if (sheetName === MANUAL_SHEET_NAME) {
+      // Manual sheet: Internal ID + Timestamp; material columns appended dynamically
+      sheet.getRange(1, 1, 1, 2).setValues([['Internal Manual ID', 'Timestamp']]);
     }
   }
   return sheet;
