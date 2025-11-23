@@ -120,6 +120,25 @@
     </div>
 
     <div id="data-message-area" class="mt-4 p-3 rounded-lg text-sm text-center hidden"></div>
+
+    <!-- Current Stock Table (NEW) -->
+    <h2 class="text-2xl font-bold text-gray-700 mt-8 mb-4">Current Stock</h2>
+    <div class="overflow-x-auto rounded-lg border border-gray-200 mb-8">
+      <table id="stock-table" class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Material</th>
+            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Sales</th>
+            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Purchases</th>
+            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Net</th>
+            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Manual (last)</th>
+          </tr>
+        </thead>
+        <tbody id="stock-body" class="bg-white divide-y divide-gray-200">
+          <tr><td colspan="5" class="px-6 py-4 text-center text-gray-500">Loading stock...</td></tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 
 </div>
@@ -358,41 +377,50 @@
   const dashboardContainer = document.getElementById('dashboard-container');
   const salesPOBody = document.getElementById('sales-po-body');
   const dataMessageArea = document.getElementById('data-message-area');
-  
-  // Purchase Order Form Elements
-  const poModal = document.getElementById('po-modal');
-  const poForm = document.getElementById('po-form');
-  const poMessageArea = document.getElementById('po-message-area');
-  const materialListBodyPO = document.getElementById('material-list-body-po'); // Specific for PO
-  const materialSearchInputPO = document.getElementById('material-search-po'); // Specific for PO
 
-  // Sales Order Form Elements (NEW)
-  const salesPOModal = document.getElementById('sales-po-modal');
-  const salesModalTitle = document.getElementById('sales-modal-title');
-  const salesPOForm = document.getElementById('sales-po-form');
-  const salesPOMessageArea = document.getElementById('sales-po-message-area');
-  const materialListBodySales = document.getElementById('material-list-body-sales'); // Specific for Sales
-  const materialSearchInputSales = document.getElementById('material-search-sales'); // Specific for Sales
+  // New: Stock table body reference
+  const stockBody = document.getElementById('stock-body');
 
-  // Manual Stock Form Elements (NEW)
-  const manualStockModal = document.getElementById('manual-stock-modal');
-  const manualForm = document.getElementById('manual-form');
-  const manualMessageArea = document.getElementById('manual-message-area');
-  const materialListBodyManual = document.getElementById('material-list-body-manual'); // Specific for Manual Stock
-  const materialSearchInputManual = document.getElementById('material-search-manual'); // Specific for Manual Stock
-  const manualSubmitBtn = document.getElementById('manual-submit-btn');
+  // Load current stock data and render the stock table
+  function loadStockData() {
+    stockBody.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-gray-500">Loading stock...</td></tr>';
+    dataMessageArea.style.display = 'none';
 
-  // Item Details Modal Elements
-  const itemDetailsModal = document.getElementById('item-details-modal');
-  const itemDetailsTitle = document.getElementById('item-details-title');
-  const itemDetailsBody = document.getElementById('item-details-body');
+    google.script.run
+      .withSuccessHandler(data => {
+        if (!data || data.error) {
+          stockBody.innerHTML = '';
+          showMessage(data && data.message ? data.message : 'Failed to load stock data.', false, dataMessageArea);
+          return;
+        }
+        renderStockTable(data);
+      })
+      .withFailureHandler(error => {
+        stockBody.innerHTML = '';
+        showMessage(`Failed to load stock: ${error}`, false, dataMessageArea);
+      })
+      .getCurrentStockData();
+  }
 
-  // Sales Form Specific Inputs
-  const customerPoIdInput = document.getElementById('customer-po-id');
-  const salesPoDateInput = document.getElementById('sales-po-date');
-  const appointmentDateInput = document.getElementById('appointment-date');
-  const salesInvoiceNumberInput = document.getElementById('sales-invoice-number');
-  const salesSubmitBtn = document.getElementById('sales-po-submit-btn');
+  function renderStockTable(data) {
+    stockBody.innerHTML = '';
+    if (!Array.isArray(data) || data.length === 0) {
+      stockBody.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-gray-500">No materials found.</td></tr>';
+      return;
+    }
+    data.forEach(item => {
+      const row = document.createElement('tr');
+      row.className = 'hover:bg-gray-50';
+      row.innerHTML = `
+        <td class="px-6 py-3 text-sm font-medium text-gray-900">${item.name} (${item.id})</td>
+        <td class="px-6 py-3 text-sm text-gray-700 text-right">${item.sales}</td>
+        <td class="px-6 py-3 text-sm text-gray-700 text-right">${item.purchases}</td>
+        <td class="px-6 py-3 text-sm ${item.net < 0 ? 'text-red-600' : 'text-gray-700'} text-right font-semibold">${item.net}</td>
+        <td class="px-6 py-3 text-sm text-gray-700 text-right">${item.manual}</td>
+      `;
+      stockBody.appendChild(row);
+    });
+  }
 
   // --- Data & State ---
   const SESSION_KEY = 'isLoggedIn';
@@ -517,6 +545,7 @@
         welcomeMessage.textContent = `Welcome, ${email || 'User'}`;
     }
     loadSalesData();
+    loadStockData(); // <-- NEW: load stock after sales
   }
 
   function loadSalesData() {
@@ -1098,6 +1127,7 @@
               closeManualStockForm();
               manualForm.reset();
               loadSalesData(); // refresh dashboard if needed
+              loadStockData(); // <-- NEW: refresh stock table after manual entry
           }, 1200);
         } else {
           showMessage(result.message, false, manualMessageArea);

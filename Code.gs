@@ -31,6 +31,9 @@ function getSheetByName(sheetName) {
     } else if (sheetName === MANUAL_SHEET_NAME) {
       // Manual sheet: Internal ID + Timestamp; material columns appended dynamically
       sheet.getRange(1, 1, 1, 2).setValues([['Internal Manual ID', 'Timestamp']]);
+    } else if (sheetName === DATA_SHEET_NAME) {
+      // Data sheet: first column is label ('Metric'), material headers start from column B
+      sheet.getRange(1, 1, 1, 1).setValues([['Metric']]);
     }
   }
   return sheet;

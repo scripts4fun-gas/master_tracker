@@ -38,3 +38,8 @@ const MANUAL_SHEET_NAME = 'Manual';            // Added for manual stock entries
 const MANUAL_COL_INTERNAL_ID = 0;              // Column A: Internal Manual ID (M001...)
 const MANUAL_COL_TIMESTAMP = 1;                // Column B: Timestamp of manual entry
 const MANUAL_COL_FIRST_MATERIAL = 2;           // Column C onwards: Material quantities
+
+// --- DATA SHEET CONSTANTS (0-based) ---
+// Data sheet holds material headers starting from second column (Column B)
+const DATA_SHEET_NAME = 'Data';
+const DATA_COL_FIRST_MATERIAL = 1; // Column B onwards contain material IDs/values

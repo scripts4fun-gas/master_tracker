@@ -419,3 +419,133 @@ function addManualStock(manualData) {
     return { error: true, message: "Server error during manual stock submission: " + e.toString() };
   }
 }
+
+/**
+ * Compute stock by aggregating Purchases and Sales, read last Manual row,
+ * update the DATA sheet (headers, sales row, purchases row, net row, manual last row),
+ * and return an array of objects: [{ id, name, sales, purchases, net, manual }, ...]
+ */
+function computeAndUpdateStock() {
+  try {
+    // 1. Get master material list & map (in order as listed in Material sheet)
+    const materialSheet = getSheetByName(MATERIAL_SHEET_NAME);
+    const matData = materialSheet.getDataRange().getValues();
+    const materialIds = []; // ordered
+    const productMap = new Map(); // id => name
+
+    for (let i = 1; i < matData.length; i++) {
+      const row = matData[i];
+      if (row && row[MATERIAL_COL_ID]) {
+        const id = row[MATERIAL_COL_ID].toString().trim();
+        materialIds.push(id);
+        productMap.set(id, row[MATERIAL_COL_NAME] ? row[MATERIAL_COL_NAME].toString().trim() : id);
+      }
+    }
+
+    // Initialize sums
+    const salesSums = {};
+    const purchaseSums = {};
+    const manualLast = {};
+    materialIds.forEach(id => {
+      salesSums[id] = 0;
+      purchaseSums[id] = 0;
+      manualLast[id] = 0;
+    });
+
+    // Helper to accumulate from a sheet given firstMaterialCol index
+    function accumulateFromSheet(sheet, sheetFirstMaterialCol, targetMap) {
+      if (!sheet || sheet.getLastRow() < 2) return;
+      const headers = sheet.getRange(1, sheetFirstMaterialCol + 1, 1, Math.max(1, sheet.getLastColumn() - sheetFirstMaterialCol)).getValues()[0].map(h => h.toString().trim());
+      const numRows = sheet.getLastRow() - 1;
+      const data = sheet.getRange(2, sheetFirstMaterialCol + 1, numRows, headers.length).getValues();
+      for (let r = 0; r < data.length; r++) {
+        const row = data[r];
+        for (let c = 0; c < headers.length; c++) {
+          const matId = headers[c];
+          if (!matId) continue;
+          const val = row[c];
+          const qty = (typeof val === 'number') ? val : (parseInt(val, 10) || 0);
+          if (typeof targetMap[matId] === 'undefined') targetMap[matId] = 0;
+          targetMap[matId] += qty;
+        }
+      }
+    }
+
+    // 2. Accumulate Purchases
+    const poSheet = getSheetByName(PO_SHEET_NAME);
+    accumulateFromSheet(poSheet, PO_COL_FIRST_MATERIAL, purchaseSums);
+
+    // 3. Accumulate Sales
+    const salesSheet = getSheetByName(SALES_SHEET_NAME);
+    accumulateFromSheet(salesSheet, SALES_COL_FIRST_MATERIAL, salesSums);
+
+    // 4. Read last Manual entry (if any) - use header from manual sheet
+    const manualSheet = getSheetByName(MANUAL_SHEET_NAME);
+    if (manualSheet && manualSheet.getLastRow() >= 2) {
+      const lastRowIndex = manualSheet.getLastRow();
+      const manualHeaders = manualSheet.getRange(1, MANUAL_COL_FIRST_MATERIAL + 1, 1, Math.max(0, manualSheet.getLastColumn() - MANUAL_COL_FIRST_MATERIAL)).getValues()[0].map(h => h.toString().trim());
+      if (manualHeaders.length > 0) {
+        const lastValues = manualSheet.getRange(lastRowIndex, MANUAL_COL_FIRST_MATERIAL + 1, 1, manualHeaders.length).getValues()[0];
+        for (let i = 0; i < manualHeaders.length; i++) {
+          const matId = manualHeaders[i];
+          if (!matId) continue;
+          const val = lastValues[i];
+          const qty = (typeof val === 'number') ? val : (parseInt(val, 10) || 0);
+          manualLast[matId] = qty;
+        }
+      }
+    }
+
+    // 5. Build per-material result list (use materialIds master order)
+    const result = materialIds.map(id => {
+      const name = productMap.get(id) || id;
+      const sales = salesSums[id] || 0;
+      const purchases = purchaseSums[id] || 0;
+      const manual = manualLast[id] || 0;
+      const net = purchases - sales;
+      return { id, name, sales, purchases, net, manual };
+    });
+
+    // 6. Update Data sheet
+    const dataSheet = getSheetByName(DATA_SHEET_NAME);
+
+    // Ensure header row: first cell 'Metric', materials across starting from DATA_COL_FIRST_MATERIAL (column B)
+    dataSheet.getRange(1, 1).setValue('Metric');
+    if (materialIds.length > 0) {
+      dataSheet.getRange(1, DATA_COL_FIRST_MATERIAL + 1, 1, materialIds.length).setValues([materialIds]);
+    }
+
+    // Prepare rows: Sales (row 2), Purchases (row 3), Net (row 4), Manual Last (row 5)
+    const salesRow = ['Sales'].concat(materialIds.map(id => salesSums[id] || 0));
+    const purchaseRow = ['Purchases'].concat(materialIds.map(id => purchaseSums[id] || 0));
+    const netRow = ['Net'].concat(materialIds.map(id => (purchaseSums[id] || 0) - (salesSums[id] || 0)));
+    const manualRow = ['Manual (last)'].concat(materialIds.map(id => manualLast[id] || 0));
+
+    // Write rows (ensure sheet has enough columns)
+    const totalColsNeeded = DATA_COL_FIRST_MATERIAL + materialIds.length + 1; // +1 for first label column
+    if (dataSheet.getLastColumn() < totalColsNeeded) {
+      // extend header row if necessary
+      dataSheet.insertColumnsAfter(dataSheet.getLastColumn(), totalColsNeeded - dataSheet.getLastColumn());
+    }
+
+    // Set rows (rows are 1-based)
+    dataSheet.getRange(2, 1, 1, 1 + materialIds.length).setValues([salesRow]);
+    dataSheet.getRange(3, 1, 1, 1 + materialIds.length).setValues([purchaseRow]);
+    dataSheet.getRange(4, 1, 1, 1 + materialIds.length).setValues([netRow]);
+    dataSheet.getRange(5, 1, 1, 1 + materialIds.length).setValues([manualRow]);
+
+    return result;
+
+  } catch (e) {
+    Logger.log("Error in computeAndUpdateStock: " + e.toString());
+    return { error: true, message: "Failed to compute/update stock: " + e.toString() };
+  }
+}
+
+/**
+ * Wrapper exposed to client-side for retrieving the current stock data.
+ * Called via google.script.run.getCurrentStockData(...)
+ */
+function getCurrentStockData() {
+  return computeAndUpdateStock();
+}
