@@ -1161,6 +1161,12 @@
       return;
     }
 
+    // --- 1b. PO Number Length Validation ---
+    if (vendorPoId.length <= 5) {
+      showMessage("Validation Error: Vendor PO ID must be greater than 5 characters. Please ensure you entered the PO number and not the Sr. No.", false, poMessageArea);
+      return;
+    }
+
     // --- 2. Date Validation (Despatch Date vs PO Date) ---
     if (despatchDateStr) {
         const poDate = new Date(poDateStr);
@@ -1491,6 +1497,12 @@
     if (!customerPoId || !poDateStr) { 
         // Should only happen in Add Mode, but good for safety
         showMessage("Please fill in the required fields (Customer PO ID and Date of PO).", false, salesPOMessageArea);
+        return;
+    }
+
+    // --- 1b. PO Number Length Validation ---
+    if (customerPoId.length <= 5) {
+        showMessage("Validation Error: Customer PO ID must be greater than 5 characters. Please ensure you entered the PO number and not the Sr. No.", false, salesPOMessageArea);
         return;
     }
 
