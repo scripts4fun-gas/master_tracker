@@ -83,6 +83,34 @@ function addPurchaseOrder(poData) {
     newRow[PO_COL_DATE] = poData.poDate ? new Date(poData.poDate) : '';
     newRow[PO_COL_DESPATCH_DATE] = poData.despatchDate ? new Date(poData.despatchDate) : '';
     newRow[PO_COL_INVOICE] = poData.invoiceNumber;
+    newRow[PO_COL_SUPPLIER_ID] = poData.supplierId || '';
+    
+    // --- 3. Handle file uploads ---
+    let poLink = '', invLink = '', ewayLink = '';
+    if (poData.filesMeta && poData.filesMeta.length > 0) {
+      // safe PURCHASE_FOLDER fallback
+      const purchaseFolderName = (typeof PURCHASE_FOLDER !== 'undefined' && PURCHASE_FOLDER) ? PURCHASE_FOLDER : 'PurchaseInternal';
+
+      // Folder path: PURCHASE folder -> YYYY/MM/DD/<PO_NUMBER>
+      const dateObj = poData.poDate ? new Date(poData.poDate) : new Date();
+      const yyyy = dateObj.getFullYear();
+      const mm = ('0' + (dateObj.getMonth() + 1)).slice(-2);
+      const dd = ('0' + dateObj.getDate()).slice(-2);
+
+      // Use poId (assumed valid) and sanitize for folder name
+      const rawPo = poData.poId.toString().trim();
+      const safePo = rawPo.replace(/[\\\/:\*\?"<>\|]/g, '_');
+
+      const subPath = `${purchaseFolderName}/${yyyy}/${mm}/${dd}/${safePo}`; // include PO number folder
+      const urls = uploadFilesToDrive(PARENT_FOLDER_ID, subPath, poData.filesMeta);
+      // Order: [PO, Invoice, EWay]
+      poLink = urls[0] || '';
+      invLink = urls[1] || '';
+      ewayLink = urls[2] || '';
+    }
+    newRow[PO_COL_PO_LINK] = poLink;
+    newRow[PO_COL_INV_LINK] = invLink;
+    newRow[PO_COL_EWAY_LINK] = ewayLink;
     
     // Insert material quantities starting from PO_COL_FIRST_MATERIAL
     finalHeaders.forEach((matId, index) => {
@@ -325,6 +353,7 @@ function getPurchaseData() {
       const internalId = row[P_COL_INTERNAL_ID]; // Column A
       const vendorPoId = row[PO_COL_ID]; // Column B
       const invoiceNumber = row[PO_COL_INVOICE]; // Column E
+      const supplierId = row[PO_COL_SUPPLIER_ID] || ''; // Column F
 
       // PO Date (Column C)
       const poDate = row[PO_COL_DATE] instanceof Date ? Utilities.formatDate(row[PO_COL_DATE], Session.getScriptTimeZone(), "MM/dd/yyyy") : row[PO_COL_DATE];
@@ -333,6 +362,11 @@ function getPurchaseData() {
       // Despatch Date (Column D)
       const despatchDate = row[PO_COL_DESPATCH_DATE] instanceof Date ? Utilities.formatDate(row[PO_COL_DESPATCH_DATE], Session.getScriptTimeZone(), "MM/dd/yyyy") : row[PO_COL_DESPATCH_DATE];
       const rawDespatchDate = row[PO_COL_DESPATCH_DATE] instanceof Date ? Utilities.formatDate(row[PO_COL_DESPATCH_DATE], Session.getScriptTimeZone(), "yyyy-MM-dd") : '';
+
+      // File links
+      const poLink = row[PO_COL_PO_LINK] || '';
+      const invLink = row[PO_COL_INV_LINK] || '';
+      const ewayLink = row[PO_COL_EWAY_LINK] || '';
 
       let displayItemDetails = []; // For modal display (string array)
       let rawItemDetails = {};     // For potential edit form (map of matId: quantity)
@@ -360,6 +394,10 @@ function getPurchaseData() {
         despatchDate: despatchDate, // Display format
         rawDespatchDate: rawDespatchDate, // Form input format
         invoiceNumber: invoiceNumber,
+        supplierId: supplierId,
+        poLink: poLink,
+        invLink: invLink,
+        ewayLink: ewayLink,
         displayItemDetails: displayItemDetails.join('\n'),
         rawItemDetails: rawItemDetails
       });
@@ -929,6 +967,30 @@ function getDeliveriesForForm() {
     return deliveries;
   } catch (e) {
     Logger.log("Error in getDeliveriesForForm: " + e.toString());
+    return [];
+  }
+}
+
+/**
+ * Returns a list of suppliers from the Supplier sheet.
+ * Assumes a 'Supplier' sheet with columns: [Supplier ID, Supplier Name]
+ */
+function getSuppliersForForm() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const supplierSheet = ss.getSheetByName(SUPPLIER_SHEET_NAME);
+    if (!supplierSheet) return [];
+    const data = supplierSheet.getDataRange().getValues();
+    const suppliers = [];
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][SUPPLIER_COL_ID]) suppliers.push({
+        id: data[i][SUPPLIER_COL_ID],
+        name: data[i][SUPPLIER_COL_NAME]
+      });
+    }
+    return suppliers;
+  } catch (e) {
+    Logger.log("Error in getSuppliersForForm: " + e.toString());
     return [];
   }
 }

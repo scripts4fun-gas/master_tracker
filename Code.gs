@@ -30,8 +30,11 @@ function getSheetByName(sheetName) {
         'Vendor ID', 'Delivery ID', 'PO Link', 'Invoice Link', 'EWay Link', '...materials start here'
       ]]);
     } else if (sheetName === PO_SHEET_NAME) {
-      // Purchase headers are set to a minimum here (A to E)
-      sheet.getRange(1, 1, 1, 5).setValues([['Internal PO ID', 'Vendor PO ID', 'PO Date', 'Despatch Date', 'Invoice Number']]);
+      // Purchase headers: Internal ID, Vendor PO ID, PO Date, Despatch Date, Invoice, Supplier ID, PO Link, Inv Link, Eway Link
+      sheet.getRange(1, 1, 1, 10).setValues([[
+        'Internal PO ID', 'Vendor PO ID', 'PO Date', 'Despatch Date', 'Invoice Number',
+        'Supplier ID', 'PO Link', 'Inv Link', 'Eway Link', '...materials start here'
+      ]]);
     } else if (sheetName === MANUAL_SHEET_NAME) {
       // Manual sheet: Internal ID + Timestamp; material columns appended dynamically
       sheet.getRange(1, 1, 1, 2).setValues([['Internal Manual ID', 'Timestamp']]);
@@ -42,6 +45,8 @@ function getSheetByName(sheetName) {
       sheet.getRange(1, 1, 1, 2).setValues([['Vendor ID', 'Vendor Name']]);
     } else if (sheetName === DELIVERY_SHEET_NAME) {
       sheet.getRange(1, 1, 1, 2).setValues([['Delivery ID', 'Delivery Name']]);
+    } else if (sheetName === SUPPLIER_SHEET_NAME) {
+      sheet.getRange(1, 1, 1, 2).setValues([['Supplier ID', 'Supplier Name']]);
     }
   }
   return sheet;

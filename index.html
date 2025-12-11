@@ -207,6 +207,28 @@
                     <label for="invoice-number" class="block text-sm font-medium text-gray-700 mb-1">Invoice Number</label>
                     <input type="text" id="invoice-number" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="Optional">
                 </div>
+
+                <!-- Supplier Select (NEW) -->
+                <div>
+                    <label for="po-supplier-id" class="block text-sm font-medium text-gray-700 mb-1">Supplier</label>
+                    <select id="po-supplier-id" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"></select>
+                </div>
+            </div>
+
+            <!-- Upload Buttons (NEW) -->
+            <div class="flex flex-wrap gap-4 mb-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">PO Document</label>
+                    <input type="file" id="po-po-file" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-500 focus:ring-opacity-50"/>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Invoice Document</label>
+                    <input type="file" id="po-invoice-file" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-500 focus:ring-opacity-50"/>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">EWayBill Document</label>
+                    <input type="file" id="po-eway-file" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-500 focus:ring-opacity-50"/>
+                </div>
             </div>
 
             <!-- Material Selection Table -->
@@ -457,6 +479,19 @@
   const appointmentDateInput = document.getElementById('appointment-date');
   const salesInvoiceNumberInput = document.getElementById('sales-invoice-number');
   const salesSubmitBtn = document.getElementById('sales-po-submit-btn');
+  
+  // Sales form vendor, delivery, and file inputs
+  const salesVendorIdInput = document.getElementById('sales-vendor-id');
+  const salesDeliveryIdInput = document.getElementById('sales-delivery-id');
+  const salesPOFileInput = document.getElementById('sales-po-file');
+  const salesInvoiceFileInput = document.getElementById('sales-invoice-file');
+  const salesEWayFileInput = document.getElementById('sales-eway-file');
+
+  // Purchase form supplier and file inputs (NEW)
+  const poSupplierIdInput = document.getElementById('po-supplier-id');
+  const poPOFileInput = document.getElementById('po-po-file');
+  const poInvoiceFileInput = document.getElementById('po-invoice-file');
+  const poEWayFileInput = document.getElementById('po-eway-file');
 
   // Manual Stock
   const manualStockModal = document.getElementById('manual-stock-modal');
@@ -978,6 +1013,22 @@
     poForm.reset();
     materialSearchInputPO.value = '';
     
+    // Load suppliers dropdown
+    google.script.run
+      .withSuccessHandler(suppliers => {
+        poSupplierIdInput.innerHTML = '<option value="">-- Select Supplier --</option>';
+        suppliers.forEach(s => {
+          const opt = document.createElement('option');
+          opt.value = s.id;
+          opt.textContent = `${s.id} - ${s.name}`;
+          poSupplierIdInput.appendChild(opt);
+        });
+      })
+      .withFailureHandler(err => {
+        console.error('Failed to load suppliers:', err);
+      })
+      .getSuppliersForForm();
+    
     loadMaterials(materials => {
         renderMaterials(materials, 'po');
         filterMaterials('po');
@@ -988,13 +1039,14 @@
     poModal.classList.add('hidden');
   }
   
-  function handleSubmitPO() {
+  async function handleSubmitPO() {
     poMessageArea.style.display = 'none';
     
     const vendorPoId = document.getElementById('vendor-po-id').value.trim();
     const poDateStr = document.getElementById('po-date').value;
     const despatchDateStr = document.getElementById('despatch-date').value;
     const invoiceNumber = document.getElementById('invoice-number').value.trim();
+    const supplierId = poSupplierIdInput ? poSupplierIdInput.value : '';
     
     // --- 1. Basic Field Validation ---
     if (!vendorPoId || !poDateStr) { 
@@ -1035,12 +1087,17 @@
         return;
     }
 
-    // --- 4. Prepare Data and Submit to Backend ---
+    // --- 4. Collect file uploads ---
+    const filesMeta = await getPOFilesMeta();
+
+    // --- 5. Prepare Data and Submit to Backend ---
     const poData = {
         poId: vendorPoId, 
         poDate: poDateStr, 
         despatchDate: despatchDateStr,
         invoiceNumber: invoiceNumber,
+        supplierId: supplierId,
+        filesMeta: filesMeta,
         materials: materialQuantities
     };
     
@@ -1489,13 +1546,6 @@
   // Initialize the session check on page load
   document.addEventListener('DOMContentLoaded', checkSession);
 
-  // Add vendor select and file upload logic
-  const salesVendorIdInput = document.getElementById('sales-vendor-id');
-  const salesDeliveryIdInput = document.getElementById('sales-delivery-id');
-  const salesPOFileInput = document.getElementById('sales-po-file');
-  const salesInvoiceFileInput = document.getElementById('sales-invoice-file');
-  const salesEWayFileInput = document.getElementById('sales-eway-file');
-
   /**
    * Read up to three file inputs and return metadata array in fixed order [PO, Invoice, EWay].
    * Each element is either { name, mimeType, bytes } where bytes is base64 string, or null.
@@ -1524,6 +1574,41 @@
     const poFile = salesPOFileInput && salesPOFileInput.files && salesPOFileInput.files[0] ? salesPOFileInput.files[0] : null;
     const invFile = salesInvoiceFileInput && salesInvoiceFileInput.files && salesInvoiceFileInput.files[0] ? salesInvoiceFileInput.files[0] : null;
     const ewayFile = salesEWayFileInput && salesEWayFileInput.files && salesEWayFileInput.files[0] ? salesEWayFileInput.files[0] : null;
+
+    // Read each (preserve position; null for missing)
+    const [poMeta, invMeta, ewayMeta] = await Promise.all([
+      readFileAsBase64(poFile),
+      readFileAsBase64(invFile),
+      readFileAsBase64(ewayFile)
+    ]);
+
+    return [poMeta, invMeta, ewayMeta];
+  }
+
+  async function getPOFilesMeta() {
+    function readFileAsBase64(file) {
+      return new Promise((resolve, reject) => {
+        if (!file) return resolve(null);
+        const fr = new FileReader();
+        fr.onerror = () => reject(new Error('File read error'));
+        fr.onload = e => {
+          const dataUrl = e.target.result; // data:<mime>;base64,<data>
+          const match = dataUrl.match(/^data:(.+);base64,(.*)$/);
+          if (match) {
+            resolve({ name: file.name, mimeType: match[1], bytes: match[2] });
+          } else {
+            // fallback: encode raw string (rare)
+            const base64 = btoa(dataUrl);
+            resolve({ name: file.name, mimeType: file.type || 'application/octet-stream', bytes: base64 });
+          }
+        };
+        fr.readAsDataURL(file);
+      });
+    }
+
+    const poFile = poPOFileInput && poPOFileInput.files && poPOFileInput.files[0] ? poPOFileInput.files[0] : null;
+    const invFile = poInvoiceFileInput && poInvoiceFileInput.files && poInvoiceFileInput.files[0] ? poInvoiceFileInput.files[0] : null;
+    const ewayFile = poEWayFileInput && poEWayFileInput.files && poEWayFileInput.files[0] ? poEWayFileInput.files[0] : null;
 
     // Read each (preserve position; null for missing)
     const [poMeta, invMeta, ewayMeta] = await Promise.all([

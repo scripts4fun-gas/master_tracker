@@ -12,7 +12,11 @@ const PO_COL_ID = 1;              // User/Vendor PO ID (Column B)
 const PO_COL_DATE = 2;            // PO Date (Column C)
 const PO_COL_DESPATCH_DATE = 3;   // Despatch Date (Column D)
 const PO_COL_INVOICE = 4;         // Invoice Number (Column E)
-const PO_COL_FIRST_MATERIAL = 5;  // Start of material quantities (Column F onwards)
+const PO_COL_SUPPLIER_ID = 5;     // Supplier ID (Column F)
+const PO_COL_PO_LINK = 6;         // PO Link (Column G)
+const PO_COL_INV_LINK = 7;        // Invoice Link (Column H)
+const PO_COL_EWAY_LINK = 8;       // EWay Link (Column I)
+const PO_COL_FIRST_MATERIAL = 9;  // Start of material quantities (Column J onwards)
 
 // --- SALES ORDER COLUMN INDICES (0-based) ---
 // Internal ID, PO Number, Date of PO, Appointment Date, Invoice, VendorId, DeliveryId, PO Link, Invoice Link, EWay Link, First Material
@@ -33,6 +37,9 @@ const PARENT_FOLDER_ID = '1u-kJQ98zjDaRVijEZuCeqtB8SKzsf8b4';
 
 // New: top-level subfolder name used for Sales uploads (under PARENT_FOLDER_ID)
 const SALE_FOLDER = 'Sales';
+
+// New: top-level subfolder name used for Purchase uploads (under PARENT_FOLDER_ID)
+const PURCHASE_FOLDER = 'Purchase';
 
 // --- MATERIAL COLUMN INDICES (0-based) ---
 const MATERIAL_COL_ID = 0;
@@ -58,6 +65,11 @@ const DATA_COL_FIRST_MATERIAL = 1; // Column B onwards contain material IDs/valu
 const VENDOR_SHEET_NAME = 'Vendor';
 const VENDOR_COL_ID = 0;    // Column A: Vendor ID
 const VENDOR_COL_NAME = 1;  // Column B: Vendor Name
+
+// --- SUPPLIER SHEET CONSTANTS (0-based) ---
+const SUPPLIER_SHEET_NAME = 'Supplier';
+const SUPPLIER_COL_ID = 0;    // Column A: Supplier ID
+const SUPPLIER_COL_NAME = 1;  // Column B: Supplier Name
 
 // --- DELIVERY SHEET CONSTANTS ---
 const DELIVERY_SHEET_NAME = 'Delivery';
