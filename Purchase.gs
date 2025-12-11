@@ -956,6 +956,15 @@ function uploadFilesToDrive(folderId, subPath, files) {
         blob = Utilities.newBlob(file.bytes, file.mimeType || 'application/octet-stream', file.name);
       }
       const driveFile = folder.createFile(blob);
+      
+      // Set sharing to "anyone with the link can view"
+      try {
+        driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      } catch (shareError) {
+        Logger.log(`uploadFilesToDrive: failed to set sharing for file index ${i} name=${file.name} -> ${shareError.toString()}`);
+        // Continue even if sharing fails - file is still uploaded
+      }
+      
       urls[i] = driveFile.getUrl();
     } catch (e) {
       Logger.log(`uploadFilesToDrive: failed to upload file index ${i} name=${file && file.name} -> ${e.toString()}`);
