@@ -295,6 +295,85 @@ function updateSalesOrder(updateData) {
 }
 
 /**
+ * Fetches and processes Purchase data.
+ * Returns purchase orders with internal ID, vendor PO ID, dates, invoice, and material details.
+ * @returns {Array<object>|object} An array of structured purchase PO data or an error object.
+ */
+function getPurchaseData() {
+  try {
+    // 1. Get Material Map (ProductID to ProductName)
+    const productMap = getMaterialMap();
+
+    // 2. Get Purchase Data
+    const poSheet = getSheetByName(PO_SHEET_NAME);
+    const poData = poSheet.getDataRange().getValues();
+    if (poData.length <= 1) return []; // Only headers or empty
+
+    // Headers: Internal PO ID, Vendor PO ID, PO Date, Despatch Date, Invoice, MatId1, MatId2, ...
+    const headers = poData.shift();
+
+    // MatIds start from the column index defined by PO_COL_FIRST_MATERIAL
+    const matIdHeaders = headers.slice(PO_COL_FIRST_MATERIAL);
+
+    const purchasePOs = [];
+
+    for (const row of poData) {
+      // Check for required fields
+      if (!row[PO_COL_ID]) continue;
+
+      // Use constants for fixed columns
+      const internalId = row[P_COL_INTERNAL_ID]; // Column A
+      const vendorPoId = row[PO_COL_ID]; // Column B
+      const invoiceNumber = row[PO_COL_INVOICE]; // Column E
+
+      // PO Date (Column C)
+      const poDate = row[PO_COL_DATE] instanceof Date ? Utilities.formatDate(row[PO_COL_DATE], Session.getScriptTimeZone(), "MM/dd/yyyy") : row[PO_COL_DATE];
+      const rawPoDate = row[PO_COL_DATE] instanceof Date ? Utilities.formatDate(row[PO_COL_DATE], Session.getScriptTimeZone(), "yyyy-MM-dd") : '';
+
+      // Despatch Date (Column D)
+      const despatchDate = row[PO_COL_DESPATCH_DATE] instanceof Date ? Utilities.formatDate(row[PO_COL_DESPATCH_DATE], Session.getScriptTimeZone(), "MM/dd/yyyy") : row[PO_COL_DESPATCH_DATE];
+      const rawDespatchDate = row[PO_COL_DESPATCH_DATE] instanceof Date ? Utilities.formatDate(row[PO_COL_DESPATCH_DATE], Session.getScriptTimeZone(), "yyyy-MM-dd") : '';
+
+      let displayItemDetails = []; // For modal display (string array)
+      let rawItemDetails = {};     // For potential edit form (map of matId: quantity)
+
+      // Iterate through the quantity columns
+      for (let i = 0; i < matIdHeaders.length; i++) {
+        const matId = matIdHeaders[i].toString().trim();
+
+        // Calculate quantity column index using constant
+        const quantity = row[i + PO_COL_FIRST_MATERIAL];
+        const numericQuantity = typeof quantity === 'number' ? quantity : (parseInt(quantity) || 0);
+
+        if (numericQuantity > 0) {
+          const productName = productMap.get(matId) || `Unknown Product (ID: ${matId})`;
+          displayItemDetails.push(`${productName}: ${numericQuantity}`);
+          rawItemDetails[matId] = numericQuantity;
+        }
+      }
+
+      purchasePOs.push({
+        internalId: internalId,
+        vendorPoId: vendorPoId,
+        poDate: poDate, // Display format
+        rawPoDate: rawPoDate, // Form input format
+        despatchDate: despatchDate, // Display format
+        rawDespatchDate: rawDespatchDate, // Form input format
+        invoiceNumber: invoiceNumber,
+        displayItemDetails: displayItemDetails.join('\n'),
+        rawItemDetails: rawItemDetails
+      });
+    }
+
+    return purchasePOs;
+
+  } catch (e) {
+    Logger.log("Error in getPurchaseData: " + e.toString());
+    return { error: true, message: "Failed to load purchase data: " + e.toString() };
+  }
+}
+
+/**
  * Fetches and processes Sales data, cross-referencing with Material sheet.
  * This function now returns the internalId, raw dates, and rawItemDetails (map)
  * for use in the Edit form.

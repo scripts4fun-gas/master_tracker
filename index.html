@@ -122,6 +122,29 @@
 
     <div id="data-message-area" class="mt-4 p-3 rounded-lg text-sm text-center hidden"></div>
 
+    <!-- Purchase PO Table (NEW) -->
+    <h2 class="text-2xl font-bold text-gray-700 mt-8 mb-4">Current Purchase Orders (POs)</h2>
+    <div class="overflow-x-auto rounded-lg border border-gray-200">
+      <table id="purchase-po-table" class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Internal ID</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vendor PO ID</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PO Date</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Despatch Date</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invoice</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
+          </tr>
+        </thead>
+        <tbody id="purchase-po-body" class="bg-white divide-y divide-gray-200">
+          <!-- Data will be inserted here -->
+          <tr><td colspan="6" class="px-6 py-4 text-center text-gray-500">Loading data...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div id="purchase-message-area" class="mt-4 p-3 rounded-lg text-sm text-center hidden"></div>
+
     <!-- Current Stock Table (NEW) -->
     <h2 class="text-2xl font-bold text-gray-700 mt-8 mb-4">Current Stock</h2>
     <div class="overflow-x-auto rounded-lg border border-gray-200 mb-8">
@@ -408,7 +431,9 @@
   const loginContainer = document.getElementById('login-container');
   const dashboardContainer = document.getElementById('dashboard-container');
   const salesPOBody = document.getElementById('sales-po-body');
+  const purchasePOBody = document.getElementById('purchase-po-body');
   const dataMessageArea = document.getElementById('data-message-area');
+  const purchaseMessageArea = document.getElementById('purchase-message-area');
 
   // Form / Modal DOM references (added to avoid ReferenceError)
   // Purchase PO
@@ -616,7 +641,8 @@
         welcomeMessage.textContent = `Welcome, ${email || 'User'}`;
     }
     loadSalesData();
-    loadStockData(); // <-- NEW: load stock after sales
+    loadPurchaseData();
+    loadStockData();
   }
 
   function loadSalesData() {
@@ -633,12 +659,22 @@
 
         salesPOBody.innerHTML = ''; // Clear loading row
 
-        if (data.length === 0) {
-            salesPOBody.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-gray-500">No sales orders found.</td></tr>';
+        // Filter: Only show sales with no appointment date OR future appointment date
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const filteredData = data.filter(po => {
+          if (!po.rawAppointmentDate) return true; // No date = show
+          const appointmentDate = new Date(po.rawAppointmentDate);
+          appointmentDate.setHours(0, 0, 0, 0);
+          return appointmentDate >= today; // Future or today = show
+        });
+
+        if (filteredData.length === 0) {
+            salesPOBody.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-gray-500">No current sales orders found.</td></tr>';
             return;
         }
 
-        data.forEach(po => {
+        filteredData.forEach(po => {
           const row = document.createElement('tr');
           row.className = 'hover:bg-gray-50';
           
@@ -693,6 +729,64 @@
         showMessage(`Failed to load data: ${error}`, false, dataMessageArea);
       })
       .getSalesData();
+  }
+
+  function loadPurchaseData() {
+    purchasePOBody.innerHTML = '<tr><td colspan="6" class="px-6 py-4 text-center text-gray-500">Loading purchase data...</td></tr>';
+    purchaseMessageArea.style.display = 'none';
+
+    google.script.run
+      .withSuccessHandler(data => {
+        if (data.error) {
+            purchasePOBody.innerHTML = '';
+            showMessage(data.message, false, purchaseMessageArea);
+            return;
+        }
+
+        purchasePOBody.innerHTML = ''; // Clear loading row
+
+        // Filter: Only show purchases with no despatch date OR future despatch date
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const filteredData = data.filter(po => {
+          if (!po.rawDespatchDate) return true; // No date = show
+          const despatchDate = new Date(po.rawDespatchDate);
+          despatchDate.setHours(0, 0, 0, 0);
+          return despatchDate >= today; // Future or today = show
+        });
+
+        if (filteredData.length === 0) {
+            purchasePOBody.innerHTML = '<tr><td colspan="6" class="px-6 py-4 text-center text-gray-500">No current purchase orders found.</td></tr>';
+            return;
+        }
+
+        filteredData.forEach(po => {
+          const row = document.createElement('tr');
+          row.className = 'hover:bg-gray-50';
+          
+          const encodedDetails = encodeURIComponent(po.displayItemDetails);
+
+          row.innerHTML = `
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${po.internalId}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${po.vendorPoId}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${po.poDate}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${po.despatchDate || 'Not Set'}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${po.invoiceNumber || '-'}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              <button class="text-blue-500 hover:text-blue-700 font-semibold text-xs py-1 px-3 rounded-full bg-blue-100 transition-colors" 
+                      onclick="openItemDetailsModal('${po.vendorPoId}', '${encodedDetails}')">
+                  View Items
+              </button>
+            </td>
+          `;
+          purchasePOBody.appendChild(row);
+        });
+      })
+      .withFailureHandler(error => {
+        purchasePOBody.innerHTML = '';
+        showMessage(`Failed to load purchase data: ${error}`, false, purchaseMessageArea);
+      })
+      .getPurchaseData();
   }
 
   // --- ITEM DETAILS MODAL LOGIC ---
