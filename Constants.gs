@@ -19,18 +19,21 @@ const PO_COL_EWAY_LINK = 8;       // EWay Link (Column I)
 const PO_COL_FIRST_MATERIAL = 9;  // Start of material quantities (Column J onwards)
 
 // --- SALES ORDER COLUMN INDICES (0-based) ---
-// Internal ID, PO Number, Date of PO, Appointment Date, Invoice, VendorId, DeliveryId, PO Link, Invoice Link, EWay Link, First Material
+// Internal ID, PO Number, Date of PO, Appointment Date, Invoice, VendorId, DeliveryId, Amount, GST, Total, PO Link, Invoice Link, EWay Link, First Material
 const SALES_COL_INTERNAL_ID = 0;      // Column A
 const SALES_COL_PO_NUMBER = 1;        // Column B
 const SALES_COL_DATE_PO = 2;          // Column C: Date of PO
 const SALES_COL_APPOINTMENT_DATE = 3; // Column D: Appointment Date
 const SALES_COL_INVOICE = 4;          // Column E: Invoice Number
-const SALES_COL_VENDOR_ID = 5;        // Column F: Vendor ID (NEW)
-const SALES_COL_DELIVERY_ID = 6;      // Column G: Delivery ID (NEW)
-const SALES_COL_PO_LINK = 7;          // Column H: PO Link (shifted)
-const SALES_COL_INV_LINK = 8;         // Column I: Invoice Link (shifted)
-const SALES_COL_EWAY_LINK = 9;        // Column J: EWay Link (shifted)
-const SALES_COL_FIRST_MATERIAL = 10;  // Column K: Start of material quantities (shifted)
+const SALES_COL_VENDOR_ID = 5;        // Column F: Vendor ID
+const SALES_COL_DELIVERY_ID = 6;      // Column G: Delivery ID
+const SALES_COL_AMOUNT = 7;           // Column H: Amount (NEW)
+const SALES_COL_GST = 8;              // Column I: GST (NEW)
+const SALES_COL_TOTAL = 9;            // Column J: Total (NEW)
+const SALES_COL_PO_LINK = 10;         // Column K: PO Link (shifted)
+const SALES_COL_INV_LINK = 11;        // Column L: Invoice Link (shifted)
+const SALES_COL_EWAY_LINK = 12;       // Column M: EWay Link (shifted)
+const SALES_COL_FIRST_MATERIAL = 13;  // Column N: Start of material quantities (shifted)
 
 // --- GOOGLE DRIVE PARENT FOLDER ID ---
 const PARENT_FOLDER_ID = '1u-kJQ98zjDaRVijEZuCeqtB8SKzsf8b4';

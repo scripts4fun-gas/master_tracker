@@ -172,6 +172,9 @@ function addSalesOrder(salesData) {
     newRow[SALES_COL_INVOICE] = salesData.invoiceNumber;
     newRow[SALES_COL_VENDOR_ID] = salesData.vendorId || '';
     newRow[SALES_COL_DELIVERY_ID] = salesData.deliveryId || '';
+    newRow[SALES_COL_AMOUNT] = salesData.amount || 0;
+    newRow[SALES_COL_GST] = salesData.gst || 0;
+    newRow[SALES_COL_TOTAL] = salesData.total || 0;
 
     // --- 3. Handle file uploads ---
     let poLink = '', invLink = '', ewayLink = '';

@@ -317,6 +317,24 @@
                     <label for="sales-delivery-id" class="block text-sm font-medium text-gray-700 mb-1">Vehicle</label>
                     <select id="sales-delivery-id" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"></select>
                 </div>
+
+                <!-- Amount (NEW) -->
+                <div>
+                    <label for="sales-amount" class="block text-sm font-medium text-gray-700 mb-1">Amount</label>
+                    <input type="number" id="sales-amount" step="0.01" min="0" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="0.00" oninput="calculateSalesTotal()">
+                </div>
+
+                <!-- GST (NEW) -->
+                <div>
+                    <label for="sales-gst" class="block text-sm font-medium text-gray-700 mb-1">GST</label>
+                    <input type="number" id="sales-gst" step="0.01" min="0" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="0.00" oninput="calculateSalesTotal()">
+                </div>
+
+                <!-- Total (Computed - Read Only) -->
+                <div>
+                    <label for="sales-total" class="block text-sm font-medium text-gray-700 mb-1">Total</label>
+                    <input type="text" id="sales-total" readonly class="w-full p-3 border border-gray-300 rounded-lg bg-gray-100 text-gray-700 font-semibold cursor-not-allowed" placeholder="0.00">
+                </div>
             </div>
 
             <!-- Upload Buttons (NEW) -->
@@ -1030,6 +1048,21 @@
   }
 
   /**
+   * Calculates and displays the total (Amount + GST) in the Sales form
+   */
+  function calculateSalesTotal() {
+    const amountInput = document.getElementById('sales-amount');
+    const gstInput = document.getElementById('sales-gst');
+    const totalInput = document.getElementById('sales-total');
+    
+    const amount = parseFloat(amountInput.value) || 0;
+    const gst = parseFloat(gstInput.value) || 0;
+    const total = amount + gst;
+    
+    totalInput.value = total.toFixed(2);
+  }
+
+  /**
    * Filters the material table based on search input.
    * @param {string} type 'po', 'manual' or 'sales'
    */
@@ -1309,6 +1342,11 @@
       salesPOMessageArea.style.display = 'none';
       salesPOForm.reset();
       materialSearchInputSales.value = '';
+      
+      // Reset financial fields
+      document.getElementById('sales-amount').value = '';
+      document.getElementById('sales-gst').value = '';
+      document.getElementById('sales-total').value = '';
 
       const disabledFields = [customerPoIdInput, salesPoDateInput];
       console.log('Disabled fields array prepared', disabledFields);
@@ -1444,6 +1482,11 @@
     const customerPoId = customerPoIdInput.value.trim();
     const poDateStr = salesPoDateInput.value;
 
+    // NEW: Financial fields
+    const amount = parseFloat(document.getElementById('sales-amount').value) || 0;
+    const gst = parseFloat(document.getElementById('sales-gst').value) || 0;
+    const total = parseFloat(document.getElementById('sales-total').value) || 0;
+
     // --- 1. Basic Field Validation ---
     if (!customerPoId || !poDateStr) { 
         // Should only happen in Add Mode, but good for safety
@@ -1506,6 +1549,9 @@
             invoiceNumber: salesInvoiceNumber,
             poDate: poDateStr, 
             appointmentDate: appointmentDateStr,
+            amount: amount,
+            gst: gst,
+            total: total,
             materials: materialQuantities
         };
         successMessage = `New Sales Order ${customerPoId} submitted successfully.`;

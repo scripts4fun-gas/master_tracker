@@ -24,10 +24,11 @@ function getSheetByName(sheetName) {
     } else if (sheetName === MATERIAL_SHEET_NAME) {
       sheet.getRange(1, 1, 1, 2).setValues([['Product ID', 'Product Name']]);
     } else if (sheetName === SALES_SHEET_NAME) {
-      // Sales headers: include Vendor ID and Delivery ID and three link columns
-      sheet.getRange(1, 1, 1, 11).setValues([[
+      // Sales headers: include Vendor ID, Delivery ID, Amount, GST, Total, and three link columns
+      sheet.getRange(1, 1, 1, 14).setValues([[
         'Sale ID', 'Sale PO Number', 'Date of PO', 'Appointment Date', 'Invoice Number',
-        'Vendor ID', 'Delivery ID', 'PO Link', 'Invoice Link', 'EWay Link', '...materials start here'
+        'Vendor ID', 'Delivery ID', 'Amount', 'GST', 'Total', 
+        'PO Link', 'Invoice Link', 'EWay Link', '...materials start here'
       ]]);
     } else if (sheetName === PO_SHEET_NAME) {
       // Purchase headers: Internal ID, Vendor PO ID, PO Date, Despatch Date, Invoice, Supplier ID, PO Link, Inv Link, Eway Link
