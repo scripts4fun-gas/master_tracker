@@ -129,14 +129,17 @@
         <thead class="bg-gray-50">
           <tr>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Material</th>
-            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Sales</th>
-            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Purchases</th>
+            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Sent</th>
+            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Outgoing</th>
+            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Received</th>
+            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Incoming</th>
+            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Start</th>
             <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Net</th>
-            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Manual (last)</th>
+            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Manual</th>
           </tr>
         </thead>
         <tbody id="stock-body" class="bg-white divide-y divide-gray-200">
-          <tr><td colspan="5" class="px-6 py-4 text-center text-gray-500">Loading stock...</td></tr>
+          <tr><td colspan="8" class="px-6 py-4 text-center text-gray-500">Loading stock...</td></tr>
         </tbody>
       </table>
     </div>
@@ -448,7 +451,7 @@
 
   // Load current stock data and render the stock table
   function loadStockData() {
-    stockBody.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-gray-500">Loading stock...</td></tr>';
+    stockBody.innerHTML = '<tr><td colspan="8" class="px-6 py-4 text-center text-gray-500">Loading stock...</td></tr>';
     dataMessageArea.style.display = 'none';
 
     google.script.run
@@ -470,7 +473,7 @@
   function renderStockTable(data) {
     stockBody.innerHTML = '';
     if (!Array.isArray(data) || data.length === 0) {
-      stockBody.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-gray-500">No materials found.</td></tr>';
+      stockBody.innerHTML = '<tr><td colspan="8" class="px-6 py-4 text-center text-gray-500">No materials found.</td></tr>';
       return;
     }
     data.forEach(item => {
@@ -478,10 +481,13 @@
       row.className = 'hover:bg-gray-50';
       row.innerHTML = `
         <td class="px-6 py-3 text-sm font-medium text-gray-900">${item.name} (${item.id})</td>
-        <td class="px-6 py-3 text-sm text-gray-700 text-right">${item.sales}</td>
-        <td class="px-6 py-3 text-sm text-gray-700 text-right">${item.purchases}</td>
-        <td class="px-6 py-3 text-sm ${item.net < 0 ? 'text-red-600' : 'text-gray-700'} text-right font-semibold">${item.net}</td>
-        <td class="px-6 py-3 text-sm text-gray-700 text-right">${item.manual}</td>
+        <td class="px-6 py-3 text-sm text-gray-700 text-right">${item.sent || 0}</td>
+        <td class="px-6 py-3 text-sm text-gray-700 text-right">${item.outgoing || 0}</td>
+        <td class="px-6 py-3 text-sm text-gray-700 text-right">${item.received || 0}</td>
+        <td class="px-6 py-3 text-sm text-gray-700 text-right">${item.incoming || 0}</td>
+        <td class="px-6 py-3 text-sm text-gray-700 text-right">${item.start || 0}</td>
+        <td class="px-6 py-3 text-sm ${item.net < 0 ? 'text-red-600' : 'text-gray-700'} text-right font-semibold">${item.net || 0}</td>
+        <td class="px-6 py-3 text-sm text-gray-700 text-right">${item.manual || 0}</td>
       `;
       stockBody.appendChild(row);
     });

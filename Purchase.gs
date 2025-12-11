@@ -519,10 +519,20 @@ function computeAndUpdateStock() {
     const salesSums = {};
     const purchaseSums = {};
     const manualLast = {};
+    const startValues = {};
+    const sentSums = {};      // Sales with appointment date in the past
+    const outgoingSums = {};  // Sales with no appointment date OR future date
+    const receivedSums = {};  // Purchases with despatch date in the past
+    const incomingSums = {};  // Purchases with no despatch date
     materialIds.forEach(id => {
       salesSums[id] = 0;
       purchaseSums[id] = 0;
       manualLast[id] = 0;
+      startValues[id] = 0;
+      sentSums[id] = 0;
+      outgoingSums[id] = 0;
+      receivedSums[id] = 0;
+      incomingSums[id] = 0;
     });
 
     // Helper to accumulate from a sheet given firstMaterialCol index
@@ -544,13 +554,99 @@ function computeAndUpdateStock() {
       }
     }
 
-    // 2. Accumulate Purchases
+    // 2. Accumulate Purchases and categorize by date
     const poSheet = getSheetByName(PO_SHEET_NAME);
     accumulateFromSheet(poSheet, PO_COL_FIRST_MATERIAL, purchaseSums);
+    
+    // Categorize Purchases: Received (past despatch date) vs Incoming (no date)
+    if (poSheet && poSheet.getLastRow() >= 2) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Reset to start of day for comparison
+      const poHeaders = poSheet.getRange(1, PO_COL_FIRST_MATERIAL + 1, 1, Math.max(1, poSheet.getLastColumn() - PO_COL_FIRST_MATERIAL)).getValues()[0].map(h => h.toString().trim());
+      const numRows = poSheet.getLastRow() - 1;
+      const poData = poSheet.getRange(2, 1, numRows, poSheet.getLastColumn()).getValues();
+      
+      for (let r = 0; r < poData.length; r++) {
+        const row = poData[r];
+        const despatchDate = row[PO_COL_DESPATCH_DATE];
+        const hasDespatchDate = despatchDate && despatchDate instanceof Date;
+        
+        // Get material quantities for this row
+        for (let c = 0; c < poHeaders.length; c++) {
+          const matId = poHeaders[c];
+          if (!matId) continue;
+          const val = row[PO_COL_FIRST_MATERIAL + c];
+          const qty = (typeof val === 'number') ? val : (parseInt(val, 10) || 0);
+          
+          if (qty > 0) {
+            if (!hasDespatchDate) {
+              // No despatch date = Incoming
+              if (typeof incomingSums[matId] === 'undefined') incomingSums[matId] = 0;
+              incomingSums[matId] += qty;
+            } else {
+              const despatchDateOnly = new Date(despatchDate);
+              despatchDateOnly.setHours(0, 0, 0, 0);
+              if (despatchDateOnly < today) {
+                // Past date = Received
+                if (typeof receivedSums[matId] === 'undefined') receivedSums[matId] = 0;
+                receivedSums[matId] += qty;
+              } else {
+                // Future date = Incoming
+                if (typeof incomingSums[matId] === 'undefined') incomingSums[matId] = 0;
+                incomingSums[matId] += qty;
+              }
+            }
+          }
+        }
+      }
+    }
 
-    // 3. Accumulate Sales
+    // 3. Accumulate Sales and categorize by date
     const salesSheet = getSheetByName(SALES_SHEET_NAME);
     accumulateFromSheet(salesSheet, SALES_COL_FIRST_MATERIAL, salesSums);
+    
+    // Categorize Sales: Sent (past appointment date) vs Outgoing (no date OR future date)
+    if (salesSheet && salesSheet.getLastRow() >= 2) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Reset to start of day for comparison
+      const salesHeaders = salesSheet.getRange(1, SALES_COL_FIRST_MATERIAL + 1, 1, Math.max(1, salesSheet.getLastColumn() - SALES_COL_FIRST_MATERIAL)).getValues()[0].map(h => h.toString().trim());
+      const numRows = salesSheet.getLastRow() - 1;
+      const salesData = salesSheet.getRange(2, 1, numRows, salesSheet.getLastColumn()).getValues();
+      
+      for (let r = 0; r < salesData.length; r++) {
+        const row = salesData[r];
+        const appointmentDate = row[SALES_COL_APPOINTMENT_DATE];
+        const hasAppointmentDate = appointmentDate && appointmentDate instanceof Date;
+        
+        // Get material quantities for this row
+        for (let c = 0; c < salesHeaders.length; c++) {
+          const matId = salesHeaders[c];
+          if (!matId) continue;
+          const val = row[SALES_COL_FIRST_MATERIAL + c];
+          const qty = (typeof val === 'number') ? val : (parseInt(val, 10) || 0);
+          
+          if (qty > 0) {
+            if (!hasAppointmentDate) {
+              // No appointment date = Outgoing
+              if (typeof outgoingSums[matId] === 'undefined') outgoingSums[matId] = 0;
+              outgoingSums[matId] += qty;
+            } else {
+              const appointmentDateOnly = new Date(appointmentDate);
+              appointmentDateOnly.setHours(0, 0, 0, 0);
+              if (appointmentDateOnly < today) {
+                // Past date = Sent
+                if (typeof sentSums[matId] === 'undefined') sentSums[matId] = 0;
+                sentSums[matId] += qty;
+              } else {
+                // Future date = Outgoing
+                if (typeof outgoingSums[matId] === 'undefined') outgoingSums[matId] = 0;
+                outgoingSums[matId] += qty;
+              }
+            }
+          }
+        }
+      }
+    }
 
     // 4. Read last Manual entry (if any) - use header from manual sheet
     const manualSheet = getSheetByName(MANUAL_SHEET_NAME);
@@ -569,18 +665,37 @@ function computeAndUpdateStock() {
       }
     }
 
+    // 4b. Read Start values from Data sheet row 6 (if exists)
+    const dataSheet = getSheetByName(DATA_SHEET_NAME);
+    if (dataSheet && dataSheet.getLastRow() >= 6) {
+      const startHeaders = dataSheet.getRange(1, DATA_COL_FIRST_MATERIAL + 1, 1, Math.max(0, dataSheet.getLastColumn() - DATA_COL_FIRST_MATERIAL)).getValues()[0].map(h => h.toString().trim());
+      if (startHeaders.length > 0) {
+        const startRowValues = dataSheet.getRange(6, DATA_COL_FIRST_MATERIAL + 1, 1, startHeaders.length).getValues()[0];
+        for (let i = 0; i < startHeaders.length; i++) {
+          const matId = startHeaders[i];
+          if (!matId) continue;
+          const val = startRowValues[i];
+          const qty = (typeof val === 'number') ? val : (parseInt(val, 10) || 0);
+          startValues[matId] = qty;
+        }
+      }
+    }
+
     // 5. Build per-material result list (use materialIds master order)
     const result = materialIds.map(id => {
       const name = productMap.get(id) || id;
-      const sales = salesSums[id] || 0;
-      const purchases = purchaseSums[id] || 0;
+      const sent = sentSums[id] || 0;
+      const outgoing = outgoingSums[id] || 0;
+      const received = receivedSums[id] || 0;
+      const incoming = incomingSums[id] || 0;
+      const start = startValues[id] || 0;
+      const net = (received + incoming) - (sent + outgoing);
       const manual = manualLast[id] || 0;
-      const net = purchases - sales;
-      return { id, name, sales, purchases, net, manual };
+      return { id, name, sent, outgoing, received, incoming, start, net, manual };
     });
 
     // 6. Update Data sheet
-    const dataSheet = getSheetByName(DATA_SHEET_NAME);
+    // Note: dataSheet already retrieved in step 4b
 
     // Ensure header row: first cell 'Metric', materials across starting from DATA_COL_FIRST_MATERIAL (column B)
     dataSheet.getRange(1, 1).setValue('Metric');
@@ -588,10 +703,13 @@ function computeAndUpdateStock() {
       dataSheet.getRange(1, DATA_COL_FIRST_MATERIAL + 1, 1, materialIds.length).setValues([materialIds]);
     }
 
-    // Prepare rows: Sales (row 2), Purchases (row 3), Net (row 4), Manual Last (row 5)
-    const salesRow = ['Sales'].concat(materialIds.map(id => salesSums[id] || 0));
-    const purchaseRow = ['Purchases'].concat(materialIds.map(id => purchaseSums[id] || 0));
-    const netRow = ['Net'].concat(materialIds.map(id => (purchaseSums[id] || 0) - (salesSums[id] || 0)));
+    // Prepare rows: Sent (row 2), Outgoing (row 3), Received (row 4), Incoming (row 5), Start (row 6), Net (row 7), Manual (row 8)
+    const sentRow = ['Sent'].concat(materialIds.map(id => sentSums[id] || 0));
+    const outgoingRow = ['Outgoing'].concat(materialIds.map(id => outgoingSums[id] || 0));
+    const receivedRow = ['Received'].concat(materialIds.map(id => receivedSums[id] || 0));
+    const incomingRow = ['Incoming'].concat(materialIds.map(id => incomingSums[id] || 0));
+    const startRow = ['Start'].concat(materialIds.map(id => startValues[id] || 0));
+    const netRow = ['Net'].concat(materialIds.map(id => ((receivedSums[id] || 0) + (incomingSums[id] || 0)) - ((sentSums[id] || 0) + (outgoingSums[id] || 0))));
     const manualRow = ['Manual (last)'].concat(materialIds.map(id => manualLast[id] || 0));
 
     // Write rows (ensure sheet has enough columns)
@@ -602,10 +720,13 @@ function computeAndUpdateStock() {
     }
 
     // Set rows (rows are 1-based)
-    dataSheet.getRange(2, 1, 1, 1 + materialIds.length).setValues([salesRow]);
-    dataSheet.getRange(3, 1, 1, 1 + materialIds.length).setValues([purchaseRow]);
-    dataSheet.getRange(4, 1, 1, 1 + materialIds.length).setValues([netRow]);
-    dataSheet.getRange(5, 1, 1, 1 + materialIds.length).setValues([manualRow]);
+    dataSheet.getRange(2, 1, 1, 1 + materialIds.length).setValues([sentRow]);
+    dataSheet.getRange(3, 1, 1, 1 + materialIds.length).setValues([outgoingRow]);
+    dataSheet.getRange(4, 1, 1, 1 + materialIds.length).setValues([receivedRow]);
+    dataSheet.getRange(5, 1, 1, 1 + materialIds.length).setValues([incomingRow]);
+    dataSheet.getRange(6, 1, 1, 1 + materialIds.length).setValues([startRow]);
+    dataSheet.getRange(7, 1, 1, 1 + materialIds.length).setValues([netRow]);
+    dataSheet.getRange(8, 1, 1, 1 + materialIds.length).setValues([manualRow]);
 
     return result;
 
