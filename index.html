@@ -1296,9 +1296,6 @@
       if (selectedId) {
         const opt = Array.from(salesDeliveryIdInput.options).find(o => o.value == selectedId);
         if (opt) salesDeliveryIdInput.value = selectedId;
-        const isEdit = currentEditingInternalId !== null;
-        salesDeliveryIdInput.disabled = isEdit;
-        salesDeliveryIdInput.classList.toggle('disabled-input', isEdit);
       }
     }).getDeliveriesForForm();
   }
