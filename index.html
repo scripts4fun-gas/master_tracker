@@ -1231,6 +1231,8 @@
         materials: materialQuantities
     };
     
+    // Show submitting message immediately
+    showMessage("Submitting Purchase Order...", true, poMessageArea);
     toggleLoading(true, 'po');
 
     google.script.run
@@ -1618,6 +1620,8 @@
     payload.deliveryId = deliveryId;
     payload.filesMeta = filesMeta;
 
+    // Show submitting message immediately
+    showMessage(currentEditingInternalId ? "Updating Sales Order..." : "Submitting Sales Order...", true, salesPOMessageArea);
     toggleLoading(true, 'sales');
 
     console.log('Sales payload prepared for', callFunction);
