@@ -308,7 +308,7 @@
 
                 <!-- Customer Select (NEW) -->
                 <div>
-                    <label for="sales-vendor-id" class="block text-sm font-medium text-gray-700 mb-1">Customer/DC</label>
+                    <label for="sales-vendor-id" class="block text-sm font-medium text-gray-700 mb-1">Customer/DC <span class="text-red-500">*</span></label>
                     <select id="sales-vendor-id" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"></select>
                 </div>
 
@@ -320,13 +320,13 @@
 
                 <!-- Amount (NEW) -->
                 <div>
-                    <label for="sales-amount" class="block text-sm font-medium text-gray-700 mb-1">Amount</label>
+                    <label for="sales-amount" class="block text-sm font-medium text-gray-700 mb-1">Amount <span class="text-red-500">*</span></label>
                     <input type="number" id="sales-amount" step="0.01" min="0" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="0.00" oninput="calculateSalesTotal()">
                 </div>
 
                 <!-- GST (NEW) -->
                 <div>
-                    <label for="sales-gst" class="block text-sm font-medium text-gray-700 mb-1">GST</label>
+                    <label for="sales-gst" class="block text-sm font-medium text-gray-700 mb-1">GST <span class="text-red-500">*</span></label>
                     <input type="number" id="sales-gst" step="0.01" min="0" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="0.00" oninput="calculateSalesTotal()">
                 </div>
 
@@ -1510,6 +1510,9 @@
     const gst = parseFloat(document.getElementById('sales-gst').value) || 0;
     const total = parseFloat(document.getElementById('sales-total').value) || 0;
 
+    // Vendor/DC field
+    const vendorId = salesVendorIdInput ? salesVendorIdInput.value : '';
+
     // --- 1. Basic Field Validation ---
     if (!customerPoId || !poDateStr) { 
         // Should only happen in Add Mode, but good for safety
@@ -1517,7 +1520,23 @@
         return;
     }
 
-    // --- 1b. PO Number Length Validation ---
+    // --- 1a. Vendor/DC Validation (Mandatory) ---
+    if (!vendorId) {
+        showMessage("Validation Error: DC/Customer is mandatory. Please select a DC/Customer.", false, salesPOMessageArea);
+        return;
+    }
+
+    // --- 1b. Amount and GST Validation (Mandatory for both Add and Update) ---
+    if (amount <= 0) {
+        showMessage("Validation Error: Amount is mandatory and must be greater than 0.", false, salesPOMessageArea);
+        return;
+    }
+    if (gst <= 0) {
+        showMessage("Validation Error: GST is mandatory and must be greater than 0.", false, salesPOMessageArea);
+        return;
+    }
+
+    // --- 1c. PO Number Length Validation ---
     if (customerPoId.length <= 5) {
         showMessage("Validation Error: Customer PO ID must be greater than 5 characters. Please ensure you entered the PO number and not the Sr. No.", false, salesPOMessageArea);
         return;
@@ -1548,7 +1567,11 @@
         payload = {
             internalId: currentEditingInternalId,
             appointmentDate: appointmentDateStr,
-            invoiceNumber: salesInvoiceNumber
+            invoiceNumber: salesInvoiceNumber,
+            vendorId: vendorId,
+            amount: amount,
+            gst: gst,
+            total: total
         };
         successMessage = `Sales Order ${currentEditingInternalId} updated successfully.`;
     } else {
@@ -1586,12 +1609,11 @@
         successMessage = `New Sales Order ${customerPoId} submitted successfully.`;
     }
     
-    // Collect vendor, delivery and file data
-    const vendorId = salesVendorIdInput ? salesVendorIdInput.value : '';
+    // Collect delivery and file data
     const deliveryId = salesDeliveryIdInput ? salesDeliveryIdInput.value : '';
     const filesMeta = await getFilesMeta(); // implement getFilesMeta to read and encode files
 
-    // Add vendor and files to payload
+    // Add vendor, delivery and files to payload
     payload.vendorId = vendorId;
     payload.deliveryId = deliveryId;
     payload.filesMeta = filesMeta;

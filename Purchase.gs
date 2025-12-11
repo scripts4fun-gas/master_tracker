@@ -263,10 +263,25 @@ function updateSalesOrder(updateData) {
     const newInvoiceNumber = updateData.invoiceNumber || '';
     salesSheet.getRange(rowNumberInSheet, SALES_COL_INVOICE + 1).setValue(newInvoiceNumber);
 
-    // Vendor ID (optional)
+    // Vendor ID (now mandatory)
     if (typeof updateData.vendorId !== 'undefined' && updateData.vendorId !== null) {
       const newVendorId = updateData.vendorId || '';
       salesSheet.getRange(rowNumberInSheet, SALES_COL_VENDOR_ID + 1).setValue(newVendorId);
+    }
+
+    // Amount (now mandatory)
+    if (typeof updateData.amount !== 'undefined' && updateData.amount !== null) {
+      salesSheet.getRange(rowNumberInSheet, SALES_COL_AMOUNT + 1).setValue(updateData.amount);
+    }
+
+    // GST (now mandatory)
+    if (typeof updateData.gst !== 'undefined' && updateData.gst !== null) {
+      salesSheet.getRange(rowNumberInSheet, SALES_COL_GST + 1).setValue(updateData.gst);
+    }
+
+    // Total (calculated field)
+    if (typeof updateData.total !== 'undefined' && updateData.total !== null) {
+      salesSheet.getRange(rowNumberInSheet, SALES_COL_TOTAL + 1).setValue(updateData.total);
     }
 
     // Delivery ID (optional)
