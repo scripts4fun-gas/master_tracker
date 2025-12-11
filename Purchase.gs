@@ -422,7 +422,19 @@ function getSalesData() {
     // 1. Get Material Map (ProductID to ProductName)
     const productMap = getMaterialMap(); 
 
-    // 2. Get Sales Data
+    // 2. Get Vendor Map (VendorID to VendorName)
+    const vendorSheet = getSheetByName(VENDOR_SHEET_NAME);
+    const vendorMap = new Map();
+    if (vendorSheet) {
+      const vendorData = vendorSheet.getDataRange().getValues();
+      for (let i = 1; i < vendorData.length; i++) {
+        if (vendorData[i][VENDOR_COL_ID]) {
+          vendorMap.set(vendorData[i][VENDOR_COL_ID].toString().trim(), vendorData[i][VENDOR_COL_NAME]);
+        }
+      }
+    }
+
+    // 3. Get Sales Data
     const salesSheet = getSheetByName(SALES_SHEET_NAME);
     const salesData = salesSheet.getDataRange().getValues();
     if (salesData.length <= 1) return []; // Only headers or empty
@@ -443,6 +455,8 @@ function getSalesData() {
         const internalId = row[SALES_COL_INTERNAL_ID]; // Column A (Index 0)
         const poNumber = row[SALES_COL_PO_NUMBER];
         const invoiceNumber = row[SALES_COL_INVOICE]; // Column E (Index 4)
+        const vendorId = row[SALES_COL_VENDOR_ID] ? row[SALES_COL_VENDOR_ID].toString().trim() : '';
+        const vendorName = vendorId ? (vendorMap.get(vendorId) || vendorId) : '';
 
         // Date of PO (Column C, index 2)
         const dateOfPO = row[SALES_COL_DATE_PO] instanceof Date ? Utilities.formatDate(row[SALES_COL_DATE_PO], Session.getScriptTimeZone(), "MM/dd/yyyy") : row[SALES_COL_DATE_PO];
@@ -480,7 +494,8 @@ function getSalesData() {
             appointmentDate: appointmentDate, // Display format
             rawAppointmentDate: rawAppointmentDate, // Form input format
             invoiceNumber: invoiceNumber, // NEW: For update
-            vendorId: row[SALES_COL_VENDOR_ID] || '',     // NEW: Vendor ID for form
+            vendorId: vendorId,     // NEW: Vendor ID for form
+            vendorName: vendorName, // NEW: Vendor Name for display
             deliveryId: row[SALES_COL_DELIVERY_ID] || '', // NEW: Delivery ID for form
             poLink: row[SALES_COL_PO_LINK] || '',        // NEW: PO document URL
             invLink: row[SALES_COL_INV_LINK] || '',      // NEW: Invoice document URL
