@@ -718,12 +718,12 @@ function computeAndUpdateStock() {
             } else {
               const despatchDateOnly = new Date(despatchDate);
               despatchDateOnly.setHours(0, 0, 0, 0);
-              if (despatchDateOnly < today) {
-                // Past date = Received
+              if (despatchDateOnly <= today) {
+                // Today or past date = Received
                 if (typeof receivedSums[matId] === 'undefined') receivedSums[matId] = 0;
                 receivedSums[matId] += qty;
               } else {
-                // Future date = Incoming
+                // Future date (tomorrow onwards) = Incoming
                 if (typeof incomingSums[matId] === 'undefined') incomingSums[matId] = 0;
                 incomingSums[matId] += qty;
               }
@@ -737,7 +737,7 @@ function computeAndUpdateStock() {
     const salesSheet = getSheetByName(SALES_SHEET_NAME);
     accumulateFromSheet(salesSheet, SALES_COL_FIRST_MATERIAL, salesSums);
     
-    // Categorize Sales: Sent (past appointment date) vs Outgoing (no date OR future date)
+    // Categorize Sales: Sent (today or earlier) vs Outgoing (tomorrow onwards OR no date)
     if (salesSheet && salesSheet.getLastRow() >= 2) {
       const today = new Date();
       today.setHours(0, 0, 0, 0); // Reset to start of day for comparison
@@ -765,12 +765,12 @@ function computeAndUpdateStock() {
             } else {
               const appointmentDateOnly = new Date(appointmentDate);
               appointmentDateOnly.setHours(0, 0, 0, 0);
-              if (appointmentDateOnly < today) {
-                // Past date = Sent
+              if (appointmentDateOnly <= today) {
+                // Today or past date = Sent
                 if (typeof sentSums[matId] === 'undefined') sentSums[matId] = 0;
                 sentSums[matId] += qty;
               } else {
-                // Future date = Outgoing
+                // Future date (tomorrow onwards) = Outgoing
                 if (typeof outgoingSums[matId] === 'undefined') outgoingSums[matId] = 0;
                 outgoingSums[matId] += qty;
               }
@@ -797,12 +797,12 @@ function computeAndUpdateStock() {
       }
     }
 
-    // 4b. Read Start values from Data sheet row 6 (if exists)
+    // 4b. Read Start values from Data sheet row 8 (if exists)
     const dataSheet = getSheetByName(DATA_SHEET_NAME);
-    if (dataSheet && dataSheet.getLastRow() >= 6) {
+    if (dataSheet && dataSheet.getLastRow() >= 8) {
       const startHeaders = dataSheet.getRange(1, DATA_COL_FIRST_MATERIAL + 1, 1, Math.max(0, dataSheet.getLastColumn() - DATA_COL_FIRST_MATERIAL)).getValues()[0].map(h => h.toString().trim());
       if (startHeaders.length > 0) {
-        const startRowValues = dataSheet.getRange(6, DATA_COL_FIRST_MATERIAL + 1, 1, startHeaders.length).getValues()[0];
+        const startRowValues = dataSheet.getRange(8, DATA_COL_FIRST_MATERIAL + 1, 1, startHeaders.length).getValues()[0];
         for (let i = 0; i < startHeaders.length; i++) {
           const matId = startHeaders[i];
           if (!matId) continue;
@@ -821,9 +821,9 @@ function computeAndUpdateStock() {
       const received = receivedSums[id] || 0;
       const incoming = incomingSums[id] || 0;
       const start = startValues[id] || 0;
-      const net = (received + incoming) - (sent + outgoing);
+      const net = start + received - sent; // Net = start + received - sent
       const manual = manualLast[id] || 0;
-      return { id, name, sent, outgoing, received, incoming, start, net, manual };
+      return { id, name, sent, outgoing, received, incoming, net, manual };
     });
 
     // 6. Update Data sheet
@@ -835,13 +835,13 @@ function computeAndUpdateStock() {
       dataSheet.getRange(1, DATA_COL_FIRST_MATERIAL + 1, 1, materialIds.length).setValues([materialIds]);
     }
 
-    // Prepare rows: Sent (row 2), Outgoing (row 3), Received (row 4), Incoming (row 5), Start (row 6), Net (row 7), Manual (row 8)
+    // Prepare rows: Sent (row 2), Outgoing (row 3), Received (row 4), Incoming (row 5), Net (row 6), Manual (row 7)
+    // Start is stored in Data sheet row 8 and is manually entered (never overwritten)
     const sentRow = ['Sent'].concat(materialIds.map(id => sentSums[id] || 0));
     const outgoingRow = ['Outgoing'].concat(materialIds.map(id => outgoingSums[id] || 0));
     const receivedRow = ['Received'].concat(materialIds.map(id => receivedSums[id] || 0));
     const incomingRow = ['Incoming'].concat(materialIds.map(id => incomingSums[id] || 0));
-    const startRow = ['Start'].concat(materialIds.map(id => startValues[id] || 0));
-    const netRow = ['Net'].concat(materialIds.map(id => ((receivedSums[id] || 0) + (incomingSums[id] || 0)) - ((sentSums[id] || 0) + (outgoingSums[id] || 0))));
+    const netRow = ['Net'].concat(materialIds.map(id => (startValues[id] || 0) + (receivedSums[id] || 0) - (sentSums[id] || 0)));
     const manualRow = ['Manual (last)'].concat(materialIds.map(id => manualLast[id] || 0));
 
     // Write rows (ensure sheet has enough columns)
@@ -851,14 +851,14 @@ function computeAndUpdateStock() {
       dataSheet.insertColumnsAfter(dataSheet.getLastColumn(), totalColsNeeded - dataSheet.getLastColumn());
     }
 
-    // Set rows (rows are 1-based)
+    // Set rows (rows are 1-based) - reordered to match new requirement
     dataSheet.getRange(2, 1, 1, 1 + materialIds.length).setValues([sentRow]);
     dataSheet.getRange(3, 1, 1, 1 + materialIds.length).setValues([outgoingRow]);
     dataSheet.getRange(4, 1, 1, 1 + materialIds.length).setValues([receivedRow]);
     dataSheet.getRange(5, 1, 1, 1 + materialIds.length).setValues([incomingRow]);
-    dataSheet.getRange(6, 1, 1, 1 + materialIds.length).setValues([startRow]);
-    dataSheet.getRange(7, 1, 1, 1 + materialIds.length).setValues([netRow]);
-    dataSheet.getRange(8, 1, 1, 1 + materialIds.length).setValues([manualRow]);
+    dataSheet.getRange(6, 1, 1, 1 + materialIds.length).setValues([netRow]);
+    dataSheet.getRange(7, 1, 1, 1 + materialIds.length).setValues([manualRow]);
+    // Start row (row 8) is manually entered and should NOT be overwritten by this function
 
     return result;
 

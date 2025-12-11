@@ -156,13 +156,12 @@
             <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Outgoing</th>
             <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Received</th>
             <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Incoming</th>
-            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Start</th>
             <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Net</th>
             <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Manual</th>
           </tr>
         </thead>
         <tbody id="stock-body" class="bg-white divide-y divide-gray-200">
-          <tr><td colspan="8" class="px-6 py-4 text-center text-gray-500">Loading stock...</td></tr>
+          <tr><td colspan="7" class="px-6 py-4 text-center text-gray-500">Loading stock...</td></tr>
         </tbody>
       </table>
     </div>
@@ -232,7 +231,10 @@
             </div>
 
             <!-- Material Selection Table -->
-            <h3 class="text-xl font-semibold text-gray-700 mb-4">Material Quantities <span class="text-red-500">*</span></h3>
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-semibold text-gray-700">Material Quantities <span class="text-red-500">*</span></h3>
+                <div class="text-lg font-semibold text-indigo-600">Total: <span id="po-total-qty">0</span></div>
+            </div>
             
             <input type="text" id="material-search-po" onkeyup="filterMaterials('po')" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 mb-4" placeholder="Search material by name or ID...">
 
@@ -334,7 +336,10 @@
             </div>
 
             <!-- Material Selection Table -->
-            <h3 class="text-xl font-semibold text-gray-700 mb-4">Material Quantities <span class="text-red-500">*</span></h3>
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-semibold text-gray-700">Material Quantities <span class="text-red-500">*</span></h3>
+                <div class="text-lg font-semibold text-indigo-600">Total: <span id="sales-total-qty">0</span></div>
+            </div>
             
             <input type="text" id="material-search-sales" onkeyup="filterMaterials('sales')" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 mb-4" placeholder="Search material by name or ID...">
 
@@ -379,7 +384,10 @@
     </button>
 
     <form id="manual-form" onsubmit="event.preventDefault(); handleSubmitManualStock()">
-      <h3 class="text-xl font-semibold text-gray-700 mb-4">Material Quantities <span class="text-red-500">*</span></h3>
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-xl font-semibold text-gray-700">Material Quantities <span class="text-red-500">*</span></h3>
+        <div class="text-lg font-semibold text-indigo-600">Total: <span id="manual-total-qty">0</span></div>
+      </div>
 
       <input type="text" id="material-search-manual" onkeyup="filterMaterials('manual')" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 mb-4" placeholder="Search material by name or ID...">
 
@@ -533,9 +541,44 @@
   function renderStockTable(data) {
     stockBody.innerHTML = '';
     if (!Array.isArray(data) || data.length === 0) {
-      stockBody.innerHTML = '<tr><td colspan="8" class="px-6 py-4 text-center text-gray-500">No materials found.</td></tr>';
+      stockBody.innerHTML = '<tr><td colspan="7" class="px-6 py-4 text-center text-gray-500">No materials found.</td></tr>';
       return;
     }
+    
+    // Calculate totals
+    const totals = {
+      sent: 0,
+      outgoing: 0,
+      received: 0,
+      incoming: 0,
+      net: 0,
+      manual: 0
+    };
+    
+    data.forEach(item => {
+      totals.sent += (item.sent || 0);
+      totals.outgoing += (item.outgoing || 0);
+      totals.received += (item.received || 0);
+      totals.incoming += (item.incoming || 0);
+      totals.net += (item.net || 0);
+      totals.manual += (item.manual || 0);
+    });
+    
+    // Add totals row at the top
+    const totalsRow = document.createElement('tr');
+    totalsRow.className = 'bg-blue-50 font-bold border-b-2 border-blue-200';
+    totalsRow.innerHTML = `
+      <td class="px-6 py-3 text-sm font-bold text-blue-900">TOTAL</td>
+      <td class="px-6 py-3 text-sm font-bold text-blue-900 text-right">${totals.sent}</td>
+      <td class="px-6 py-3 text-sm font-bold text-blue-900 text-right">${totals.outgoing}</td>
+      <td class="px-6 py-3 text-sm font-bold text-blue-900 text-right">${totals.received}</td>
+      <td class="px-6 py-3 text-sm font-bold text-blue-900 text-right">${totals.incoming}</td>
+      <td class="px-6 py-3 text-sm font-bold ${totals.net < 0 ? 'text-red-600' : 'text-blue-900'} text-right">${totals.net}</td>
+      <td class="px-6 py-3 text-sm font-bold text-blue-900 text-right">${totals.manual}</td>
+    `;
+    stockBody.appendChild(totalsRow);
+    
+    // Add individual material rows
     data.forEach(item => {
       const row = document.createElement('tr');
       row.className = 'hover:bg-gray-50';
@@ -545,7 +588,6 @@
         <td class="px-6 py-3 text-sm text-gray-700 text-right">${item.outgoing || 0}</td>
         <td class="px-6 py-3 text-sm text-gray-700 text-right">${item.received || 0}</td>
         <td class="px-6 py-3 text-sm text-gray-700 text-right">${item.incoming || 0}</td>
-        <td class="px-6 py-3 text-sm text-gray-700 text-right">${item.start || 0}</td>
         <td class="px-6 py-3 text-sm ${item.net < 0 ? 'text-red-600' : 'text-gray-700'} text-right font-semibold">${item.net || 0}</td>
         <td class="px-6 py-3 text-sm text-gray-700 text-right">${item.manual || 0}</td>
       `;
@@ -947,7 +989,7 @@
                        data-material-id="${mat.id}"
                        data-form-type="${type}"
                        class="w-16 p-1 text-center border border-gray-300 rounded-lg text-sm ${inputDisabledClass}" 
-                       value="${quantity}" min="0" onchange="validateQuantityInput(this)" ${inputDisabledAttr}>
+                       value="${quantity}" min="0" onchange="validateQuantityInput(this)" oninput="updateFormTotal('${type}')" ${inputDisabledAttr}>
                 <button type="button" class="qty-btn px-2 py-1 bg-gray-200 rounded-lg text-gray-700 font-bold text-base ${isEditMode ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-300'}" 
                         onclick="updateQuantity('${mat.id}', 1, '${type}')" ${buttonDisabledAttr}>+</button>
             </div>
@@ -959,6 +1001,31 @@
     if (isEditMode && targetBody.children.length === 0) {
         // If in edit mode but no items had quantity > 0
         targetBody.innerHTML = '<tr><td colspan="3" class="px-6 py-4 text-center text-gray-500">No materials were recorded on this order.</td></tr>';
+    }
+    
+    // Update total after rendering
+    updateFormTotal(type);
+  }
+
+  /**
+   * Updates the total quantity displayed in the form header
+   * @param {string} type 'po', 'manual' or 'sales'
+   */
+  function updateFormTotal(type) {
+    const selector = type === 'po' ? '#material-list-body-po' : 
+                     (type === 'manual' ? '#material-list-body-manual' : '#material-list-body-sales');
+    const totalElementId = type === 'po' ? 'po-total-qty' : 
+                           (type === 'manual' ? 'manual-total-qty' : 'sales-total-qty');
+    
+    let total = 0;
+    document.querySelectorAll(`${selector} input[type="number"]`).forEach(input => {
+      const value = parseInt(input.value) || 0;
+      total += value;
+    });
+    
+    const totalElement = document.getElementById(totalElementId);
+    if (totalElement) {
+      totalElement.textContent = total;
     }
   }
 
@@ -999,7 +1066,8 @@
       if (newValue < 0) newValue = 0; // Prevent negative quantity
       
       input.value = newValue;
-      validateQuantityInput(input); 
+      validateQuantityInput(input);
+      updateFormTotal(type); // Update total when using +/- buttons
   }
 
   function validateQuantityInput(input) {
