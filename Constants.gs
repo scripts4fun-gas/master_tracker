@@ -66,4 +66,4 @@ const DELIVERY_COL_NAME = 1;  // Column B: Delivery Name
 const DELIVERY_COL_VEHICLE = 2; // Column C: Delivery Vehicle (new)
 
 // Email to receive vehicle/PO detail notifications
-const NOTIFY_EMAIL = 'symphonyashwin92@gmail.com'; // <-- set your recipient here
+const NOTIFY_EMAIL = 'symphonyashwin92@gmail.com';
