@@ -4,6 +4,7 @@ const SALES_SHEET_NAME = 'Sales'; // Changed from 'SalesOrders'
 const MATERIAL_SHEET_NAME = 'Material'; // Changed from 'Materials'
 const OTP_SHEET_NAME = 'OTPs'; // Added for consistency
 const MANUAL_SHEET_NAME = 'Manual'; // Added for manual stock entries
+const COUNTERS_SHEET_NAME = 'Counters'; // Added for tracking internal ID counters
 
 // --- PURCHASE ORDER COLUMN INDICES (0-based) ---
 // Note: This structure now supports two PO ID columns.
@@ -79,6 +80,10 @@ const DELIVERY_SHEET_NAME = 'Delivery';
 const DELIVERY_COL_ID = 0;    // Column A: Delivery ID
 const DELIVERY_COL_NAME = 1;  // Column B: Delivery Name
 const DELIVERY_COL_VEHICLE = 2; // Column C: Delivery Vehicle (new)
+
+// --- COUNTERS SHEET CONSTANTS ---
+const COUNTERS_COL_TYPE = 0;    // Column A: Type (Sales, Purchase, Manual)
+const COUNTERS_COL_COUNTER = 1; // Column B: Counter value
 
 // Email to receive vehicle/PO detail notifications
 const NOTIFY_EMAIL = 'symphonyashwin92@gmail.com';

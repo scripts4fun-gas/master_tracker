@@ -48,24 +48,31 @@ function addPurchaseOrder(poData) {
     // 0. Ensure Headers
     ensureMaterialHeadersExist(poSheet, PO_COL_FIRST_MATERIAL);
     
-    // --- 1. Internal PO ID Generation (Based on Column A: P_COL_INTERNAL_ID) ---
-    let nextPoNumber = 1;
-    if (poSheet.getLastRow() > 1) {
-        const numRows = poSheet.getLastRow() - 1;
-        const poIds = poSheet.getRange(2, P_COL_INTERNAL_ID + 1, numRows, 1).getValues().map(row => row[0].toString().trim());
-        
-        const maxNumber = poIds.reduce((max, id) => {
-            const match = id.match(/^P(\d+)$/);
-            if (match) {
-                const currentNum = parseInt(match[1], 10);
-                return Math.max(max, currentNum);
-            }
-            return max;
-        }, 0);
-        
-        nextPoNumber = maxNumber + 1;
+    // --- 1. Internal PO ID Generation (Using Counters Sheet) ---
+    const countersSheet = getSheetByName(COUNTERS_SHEET_NAME);
+    const countersData = countersSheet.getDataRange().getValues();
+    
+    // Find Purchase row in Counters sheet
+    let purchaseRowIndex = -1;
+    let currentCounter = 0;
+    for (let i = 0; i < countersData.length; i++) { // Start from row 2 (skip header)
+      if (countersData[i][COUNTERS_COL_TYPE] && countersData[i][COUNTERS_COL_TYPE].toString().trim() === 'Purchase') {
+        purchaseRowIndex = i;
+        currentCounter = parseInt(countersData[i][COUNTERS_COL_COUNTER]) || 0;
+        break;
+      }
     }
-    const newInternalPoId = `P${('000' + nextPoNumber).slice(-3)}`;
+    
+    if (purchaseRowIndex === -1) {
+      return { error: true, message: "Purchase counter not found in Counters sheet." };
+    }
+    
+    // Generate new ID
+    const nextPoNumber = currentCounter + 1;
+    const newInternalPoId = `P${('0000' + nextPoNumber).slice(-4)}`;
+    
+    // Update counter in Counters sheet
+    countersSheet.getRange(purchaseRowIndex + 1, COUNTERS_COL_COUNTER + 1).setValue(nextPoNumber);
     // --- End PO ID Generation ---
 
     // 2. Prepare Data Row
@@ -139,23 +146,32 @@ function addSalesOrder(salesData) {
     const salesSheet = getSheetByName(SALES_SHEET_NAME);
     ensureMaterialHeadersExist(salesSheet, SALES_COL_FIRST_MATERIAL);
 
-    // --- 1. Internal Sale ID Generation ---
-    let nextSaleNumber = 1;
-    if (salesSheet.getLastRow() > 1) {
-      const numRows = salesSheet.getLastRow() - 1;
-      const saleIds = salesSheet.getRange(2, SALES_COL_INTERNAL_ID + 1, numRows, 1).getValues().map(row => row[0].toString().trim());
-      const maxNumber = saleIds.reduce((max, id) => {
-        const match = id.match(/^S(\d+)$/);
-        if (match) {
-          const currentNum = parseInt(match[1], 10);
-          return Math.max(max, currentNum);
-        }
-        return max;
-      }, 0);
-      nextSaleNumber = maxNumber + 1;
+    // --- 1. Internal Sale ID Generation (Using Counters Sheet) ---
+    const countersSheet = getSheetByName(COUNTERS_SHEET_NAME);
+    const countersData = countersSheet.getDataRange().getValues();
+    
+    // Find Sales row in Counters sheet
+    let salesRowIndex = -1;
+    let currentCounter = 0;
+    for (let i = 0; i < countersData.length; i++) { // Start from row 2 (skip header)
+      if (countersData[i][COUNTERS_COL_TYPE] && countersData[i][COUNTERS_COL_TYPE].toString().trim() === 'Sales') {
+        salesRowIndex = i;
+        currentCounter = parseInt(countersData[i][COUNTERS_COL_COUNTER]) || 0;
+        break;
+      }
     }
-    const newInternalSaleId = `S${('000' + nextSaleNumber).slice(-3)}`;
-
+    
+    if (salesRowIndex === -1) {
+      return { error: true, message: "Sales counter not found in Counters sheet." };
+    }
+    
+    // Generate new ID
+    const nextSaleNumber = currentCounter + 1;
+    const newInternalSaleId = `S${('0000' + nextSaleNumber).slice(-4)}`;
+    
+    // Update counter in Counters sheet
+    countersSheet.getRange(salesRowIndex + 1, COUNTERS_COL_COUNTER + 1).setValue(nextSaleNumber);
+    // --- End Sale ID Generation ---
     // --- 2. Prepare Data Row ---
     const finalHeaders = salesSheet.getRange(1, SALES_COL_FIRST_MATERIAL + 1, 1, salesSheet.getLastColumn() - SALES_COL_FIRST_MATERIAL).getValues()[0].map(h => h.toString().trim());
     const numColumns = salesSheet.getLastColumn();
