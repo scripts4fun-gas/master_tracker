@@ -91,18 +91,15 @@ function addPurchaseOrder(poData) {
       // safe PURCHASE_FOLDER fallback
       const purchaseFolderName = (typeof PURCHASE_FOLDER !== 'undefined' && PURCHASE_FOLDER) ? PURCHASE_FOLDER : 'PurchaseInternal';
 
-      // Folder path: PURCHASE folder -> YYYY/MM/DD/<PO_NUMBER>
+      // Folder path: PURCHASE folder -> YYYY/MM/DD/<INTERNAL_ID>
       const dateObj = poData.poDate ? new Date(poData.poDate) : new Date();
       const yyyy = dateObj.getFullYear();
       const mm = ('0' + (dateObj.getMonth() + 1)).slice(-2);
       const dd = ('0' + dateObj.getDate()).slice(-2);
 
-      // Use poId (assumed valid) and sanitize for folder name
-      const rawPo = poData.poId.toString().trim();
-      const safePo = rawPo.replace(/[\\\/:\*\?"<>\|]/g, '_');
-
-      const subPath = `${purchaseFolderName}/${yyyy}/${mm}/${dd}/${safePo}`; // include PO number folder
-      const urls = uploadFilesToDrive(PARENT_FOLDER_ID, subPath, poData.filesMeta);
+      // Use Internal ID as folder name (no sanitization needed for P001 format)
+      const subPath = `${purchaseFolderName}/${yyyy}/${mm}/${dd}/${newInternalPoId}`;
+      const urls = uploadFilesToDrive(PARENT_FOLDER_ID, subPath, poData.filesMeta, poData.poId);
       // Order: [PO, Invoice, EWay]
       poLink = urls[0] || '';
       invLink = urls[1] || '';
@@ -182,18 +179,15 @@ function addSalesOrder(salesData) {
       // safe SALE_FOLDER fallback
       const saleFolderName = (typeof SALE_FOLDER !== 'undefined' && SALE_FOLDER) ? SALE_FOLDER : 'SalesInternal';
 
-      // Folder path: SALES folder -> YYYY/MM/DD/<PO_NUMBER>
+      // Folder path: SALES folder -> YYYY/MM/DD/<INTERNAL_ID>
       const dateObj = salesData.poDate ? new Date(salesData.poDate) : new Date();
       const yyyy = dateObj.getFullYear();
       const mm = ('0' + (dateObj.getMonth() + 1)).slice(-2);
       const dd = ('0' + dateObj.getDate()).slice(-2);
 
-      // Use customerPoId (assumed valid) and sanitize for folder name
-      const rawPo = salesData.customerPoId.toString().trim();
-      const safePo = rawPo.replace(/[\\\/:\*\?"<>\|]/g, '_');
-
-      const subPath = `${saleFolderName}/${yyyy}/${mm}/${dd}/${safePo}`; // include PO number folder
-      const urls = uploadFilesToDrive(PARENT_FOLDER_ID, subPath, salesData.filesMeta);
+      // Use Internal ID as folder name (no sanitization needed for S001 format)
+      const subPath = `${saleFolderName}/${yyyy}/${mm}/${dd}/${newInternalSaleId}`;
+      const urls = uploadFilesToDrive(PARENT_FOLDER_ID, subPath, salesData.filesMeta, salesData.customerPoId);
       // Order: [PO, Invoice, EWay]
       poLink = urls[0] || '';
       invLink = urls[1] || '';
@@ -292,14 +286,14 @@ function updateSalesOrder(updateData) {
       const mm = ('0' + (dateObj.getMonth() + 1)).slice(-2);
       const dd = ('0' + dateObj.getDate()).slice(-2);
 
-      // existingPoNumber is assumed valid; use it and sanitize for folder name
-      const existingPoNumber = allValues[rowIndexToUpdate][SALES_COL_PO_NUMBER].toString().trim();
-      const safePo = existingPoNumber.replace(/[\\\/:\*\?"<>\|]/g, '_');
+      // Use Internal ID as folder name
+      const subPath = `${saleFolderName}/${yyyy}/${mm}/${dd}/${internalId}`;
 
-      const subPath = `${saleFolderName}/${yyyy}/${mm}/${dd}/${safePo}`; // include PO number folder
+      // Get existing PO Number for file naming
+      const existingPoNumber = allValues[rowIndexToUpdate][SALES_COL_PO_NUMBER].toString().trim();
 
       // uploadFilesToDrive returns an array of urls in order; caller should pass slots (null allowed)
-      const urls = uploadFilesToDrive(PARENT_FOLDER_ID, subPath, updateData.filesMeta);
+      const urls = uploadFilesToDrive(PARENT_FOLDER_ID, subPath, updateData.filesMeta, existingPoNumber);
 
       // Only overwrite cells when a new non-empty URL is returned; otherwise preserve existing links
       const newPoLink = (urls[0] && urls[0].toString().trim()) ? urls[0] : null;
@@ -901,8 +895,13 @@ function getVendorsForForm() {
 /**
  * Handles file uploads and returns Drive URLs.
  * Robust: falls back to root if getFolderById fails, preserves input order and length.
+ * Files are renamed uniformly as: PO_ID_PO, PO_ID_Inv, PO_ID_Eway
+ * @param {string} folderId Parent folder ID
+ * @param {string} subPath Subfolder path
+ * @param {Array} files Array of file objects with bytes, mimeType, name
+ * @param {string} poId PO ID for standardized file naming
  */
-function uploadFilesToDrive(folderId, subPath, files) {
+function uploadFilesToDrive(folderId, subPath, files, poId) {
   // Resolve base folder with fallback to root on error
   let folder;
   try {
@@ -939,6 +938,10 @@ function uploadFilesToDrive(folderId, subPath, files) {
 
   if (!files || files.length === 0) return urls;
 
+  // Define standard file names based on order: [PO, Invoice, EWay]
+  const standardNames = ['PO', 'Inv', 'Eway'];
+  const safePoId = (poId || 'UNKNOWN').toString().trim().replace(/[\\\/:*?"<>|]/g, '_');
+
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
     if (!file) {
@@ -946,14 +949,29 @@ function uploadFilesToDrive(folderId, subPath, files) {
       continue;
     }
     try {
+      // Determine file extension from original filename or mimeType
+      let fileExt = '';
+      if (file.name) {
+        const dotIndex = file.name.lastIndexOf('.');
+        if (dotIndex > -1) fileExt = file.name.substring(dotIndex);
+      }
+      if (!fileExt && file.mimeType) {
+        // Fallback: guess extension from mimeType
+        if (file.mimeType.includes('pdf')) fileExt = '.pdf';
+        else if (file.mimeType.includes('image')) fileExt = '.jpg';
+      }
+
+      // Generate standardized filename: PO_ID_PO, PO_ID_Inv, PO_ID_Eway
+      const standardName = `${safePoId}_${standardNames[i] || 'File'}${fileExt}`;
+
       let blob;
       if (typeof file.bytes === 'string') {
         // file.bytes is base64 string
         const decoded = Utilities.base64Decode(file.bytes);
-        blob = Utilities.newBlob(decoded, file.mimeType || 'application/octet-stream', file.name);
+        blob = Utilities.newBlob(decoded, file.mimeType || 'application/octet-stream', standardName);
       } else {
         // assume raw bytes (array) or already blob-compatible
-        blob = Utilities.newBlob(file.bytes, file.mimeType || 'application/octet-stream', file.name);
+        blob = Utilities.newBlob(file.bytes, file.mimeType || 'application/octet-stream', standardName);
       }
       const driveFile = folder.createFile(blob);
       
