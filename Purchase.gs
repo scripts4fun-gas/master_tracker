@@ -311,8 +311,15 @@ function updateSalesOrder(updateData) {
       // safe SALE_FOLDER fallback
       const saleFolderName = (typeof SALE_FOLDER !== 'undefined' && SALE_FOLDER) ? SALE_FOLDER : 'SalesInternal';
 
-      // Use PO date if available to create folder path, otherwise today
-      const dateObj = updateData.poDate ? new Date(updateData.poDate) : new Date();
+      // Use PO date from updateData if available, otherwise get it from existing row, fallback to today
+      let dateObj;
+      if (updateData.poDate) {
+        dateObj = new Date(updateData.poDate);
+      } else if (allValues[rowIndexToUpdate][SALES_COL_DATE_PO]) {
+        dateObj = new Date(allValues[rowIndexToUpdate][SALES_COL_DATE_PO]);
+      } else {
+        dateObj = new Date();
+      }
       const yyyy = dateObj.getFullYear();
       const mm = ('0' + (dateObj.getMonth() + 1)).slice(-2);
       const dd = ('0' + dateObj.getDate()).slice(-2);
@@ -525,6 +532,9 @@ function getSalesData() {
             vendorId: vendorId,     // NEW: Vendor ID for form
             vendorName: vendorName, // NEW: Vendor Name for display
             deliveryId: row[SALES_COL_DELIVERY_ID] || '', // NEW: Delivery ID for form
+            amount: row[SALES_COL_AMOUNT] || 0, // Amount
+            gst: row[SALES_COL_GST] || 0, // GST
+            total: row[SALES_COL_TOTAL] || 0, // Total
             poLink: row[SALES_COL_PO_LINK] || '',        // NEW: PO document URL
             invLink: row[SALES_COL_INV_LINK] || '',      // NEW: Invoice document URL
             ewayLink: row[SALES_COL_EWAY_LINK] || '',    // NEW: EWay document URL
