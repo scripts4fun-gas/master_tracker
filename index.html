@@ -907,11 +907,19 @@
       if (items.length === 0) {
           itemDetailsBody.innerHTML = '<tr><td colspan="2" class="px-6 py-4 text-center text-gray-500">No items recorded for this order.</td></tr>';
       } else {
+          let totalCB = 0; // Sum of all quantities
+          
           items.forEach(item => {
               // Item format is "Material Name: Quantity"
               const parts = item.split(':');
               const materialName = parts[0].trim();
               const quantity = parts.length > 1 ? parts[1].trim() : 'N/A';
+              
+              // Add to total if quantity is a number
+              const numericQty = parseInt(quantity, 10);
+              if (!isNaN(numericQty)) {
+                  totalCB += numericQty;
+              }
               
               const row = document.createElement('tr');
               row.className = 'hover:bg-gray-50';
@@ -921,6 +929,15 @@
               `;
               itemDetailsBody.appendChild(row);
           });
+          
+          // Add Total CB row
+          const totalRow = document.createElement('tr');
+          totalRow.className = 'border-t-2 border-gray-300 bg-gray-50 font-bold';
+          totalRow.innerHTML = `
+              <td class="px-6 py-3 text-sm font-bold text-gray-900">Total CB</td>
+              <td class="px-6 py-3 text-center text-sm font-bold text-gray-900">${totalCB}</td>
+          `;
+          itemDetailsBody.appendChild(totalRow);
       }
 
       itemDetailsModal.classList.remove('hidden');
