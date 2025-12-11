@@ -85,5 +85,5 @@ const DELIVERY_COL_VEHICLE = 2; // Column C: Delivery Vehicle (new)
 const COUNTERS_COL_TYPE = 0;    // Column A: Type (Sales, Purchase, Manual)
 const COUNTERS_COL_COUNTER = 1; // Column B: Counter value
 
-// Email to receive vehicle/PO detail notifications
-const NOTIFY_EMAIL = 'symphonyashwin92@gmail.com';
+// Email(s) to receive vehicle/PO detail notifications (semicolon-separated for multiple recipients)
+const NOTIFY_EMAIL = 'schnprabhu@gmail.com;symphonyashwin92@gmail.com;uaprabhu86@gmail.com';

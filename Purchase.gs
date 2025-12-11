@@ -1171,17 +1171,25 @@ function sendVehicleEmail(internalId) {
       }
     }
 
-    // Compose email
-    const to = (typeof NOTIFY_EMAIL !== 'undefined' && NOTIFY_EMAIL) ? NOTIFY_EMAIL : '';
-    if (!to) return { error: true, message: 'Notification email not configured on server.' };
+    // Compose email - parse semicolon-separated recipients
+    const emailList = (typeof NOTIFY_EMAIL !== 'undefined' && NOTIFY_EMAIL) ? NOTIFY_EMAIL : '';
+    if (!emailList) return { error: true, message: 'Notification email not configured on server.' };
 
-    const subject = 'Details for Invoice';
+    const emails = emailList.split(';').map(e => e.trim()).filter(e => e);
+    if (emails.length === 0) return { error: true, message: 'No valid email addresses configured.' };
+
+    const toEmail = emails[0]; // First email as recipient
+    const ccEmails = emails.slice(1).join(','); // Rest as CC (comma-separated for MailApp)
+
+    const subject = `Details for Invoice - PO ${poNumber || 'N/A'}`;
     let body = `PO Number: ${poNumber || 'N/A'}\n\nLink to PO: ${safePoLink || 'N/A'}\n\nDelivery Vehicle: ${deliveryVehicle || 'N/A'}\n\nVendor Name: ${vendorName || 'N/A'}`;
 
-    // Send email (MailApp)
-    MailApp.sendEmail({ to: to, subject: subject, body: body });
+    // Send email with first address as TO and others as CC
+    const emailOptions = { to: toEmail, subject: subject, body: body };
+    if (ccEmails) emailOptions.cc = ccEmails;
+    MailApp.sendEmail(emailOptions);
 
-    return { success: true, message: `Notification sent to ${to}` };
+    return { success: true, message: `Notification sent to ${toEmail}${ccEmails ? ' (CC: ' + ccEmails + ')' : ''}` };
   } catch (e) {
     Logger.log('Error in sendVehicleEmail: ' + e.toString());
     return { error: true, message: 'Failed to send vehicle email: ' + e.toString() };
