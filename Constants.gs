@@ -45,6 +45,9 @@ const SALE_FOLDER = 'Sales';
 // New: top-level subfolder name used for Purchase uploads (under PARENT_FOLDER_ID)
 const PURCHASE_FOLDER = 'Purchase';
 
+// New: top-level subfolder name used for Reports (under PARENT_FOLDER_ID)
+const REPORTS_FOLDER = 'Reports';
+
 // --- MATERIAL COLUMN INDICES (0-based) ---
 const MATERIAL_COL_ID = 0;
 const MATERIAL_COL_NAME = 1;
@@ -87,3 +90,6 @@ const COUNTERS_COL_COUNTER = 1; // Column B: Counter value
 
 // Email(s) to receive vehicle/PO detail notifications (semicolon-separated for multiple recipients)
 const NOTIFY_EMAIL = 'schnprabhu@gmail.com;symphonyashwin92@gmail.com;uaprabhu86@gmail.com';
+
+// Email(s) to receive weekly sales reports (semicolon-separated for multiple recipients)
+const REPORT_EMAIL = 'schnprabhu@gmail.com;symphonyashwin92@gmail.com;uaprabhu86@gmail.com';
