@@ -1330,6 +1330,31 @@ function generateWeeklySalesReport(startDate, endDate) {
 
     if (reportData.length > 0) {
       reportSheet.getRange(2, 1, reportData.length, headers.length).setValues(reportData);
+      // Set all data cells to left alignment
+      reportSheet.getRange(2, 1, reportData.length, headers.length).setHorizontalAlignment('left');
+    }
+
+    // 6. Add totals row
+    if (filteredSales.length > 0) {
+      const totalQuantity = filteredSales.reduce((sum, sale) => sum + sale.totalQuantity, 0);
+      const totalAmount = filteredSales.reduce((sum, sale) => sum + sale.amount, 0);
+      const totalGst = filteredSales.reduce((sum, sale) => sum + sale.gst, 0);
+      const totalTotal = filteredSales.reduce((sum, sale) => sum + sale.total, 0);
+
+      const totalsRow = [
+        '',
+        '',
+        '',
+        'TOTAL',
+        totalQuantity,
+        totalAmount,
+        totalGst,
+        totalTotal
+      ];
+
+      const totalsRowNumber = reportData.length + 2; // +2 because header is row 1, data starts at row 2
+      reportSheet.getRange(totalsRowNumber, 1, 1, headers.length).setValues([totalsRow]);
+      reportSheet.getRange(totalsRowNumber, 1, 1, headers.length).setFontWeight('bold').setBackground('#e8eaf6').setHorizontalAlignment('left');
     }
 
     // Auto-resize columns
