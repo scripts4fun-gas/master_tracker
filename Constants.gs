@@ -93,3 +93,6 @@ const NOTIFY_EMAIL = 'schnprabhu@gmail.com;symphonyashwin92@gmail.com;uaprabhu86
 
 // Email(s) to receive weekly sales reports (semicolon-separated for multiple recipients)
 const REPORT_EMAIL = 'schnprabhu@gmail.com;symphonyashwin92@gmail.com;uaprabhu86@gmail.com';
+
+// Email(s) to receive sanity check reports (semicolon-separated for multiple recipients)
+const SANITY_REPORT_EMAIL = 'symphonyashwin92@gnmail.com;uaprabhu86@gmail.com';
