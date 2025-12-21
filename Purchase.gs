@@ -4,7 +4,8 @@
 /**
  * Ensures that the header row of a given sheet contains columns for all materials
  * listed in the Material sheet, starting at the specified column index.
- * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet The sheet to update (Purchase or Sales).
+ * Used for Purchase and Manual sheets.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet The sheet to update (Purchase or Manual).
  * @param {number} materialStartIndex The 0-based index where material columns should start.
  */
 function ensureMaterialHeadersExist(sheet, materialStartIndex) {
@@ -33,6 +34,48 @@ function ensureMaterialHeadersExist(sheet, materialStartIndex) {
     const startCol = sheet.getLastColumn() + 1;
     sheet.getRange(1, startCol, 1, headersToAppend.length).setValues([headersToAppend]);
     Logger.log(`Appended ${headersToAppend.length} material IDs to ${sheet.getName()} headers.`);
+  }
+}
+
+/**
+ * Ensures that the header row of the Sales sheet contains columns for all materials
+ * for both PO and Dispatch quantities, starting at the specified column index.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet The Sales sheet to update.
+ * @param {number} materialStartIndex The 0-based index where PO material columns should start.
+ */
+function ensureSalesMaterialHeadersExist(sheet, materialStartIndex) {
+  const materialMap = getMaterialMap();
+  const materialIds = Array.from(materialMap.keys());
+  
+  if (materialIds.length === 0) return;
+
+  const currentHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  
+  // We need: [Fixed Cols...] [PO_Mat1, PO_Mat2...] [Dispatch_Mat1, Dispatch_Mat2...]
+  // Check if we have both PO and Dispatch headers
+  let headersToAppend = [];
+  
+  // First, check PO headers (starting at materialStartIndex)
+  for (const matId of materialIds) {
+    const poHeader = `PO_${matId}`;
+    if (!currentHeaders.includes(poHeader)) {
+      headersToAppend.push(poHeader);
+    }
+  }
+  
+  // Then, check Dispatch headers
+  for (const matId of materialIds) {
+    const dispatchHeader = `Dispatch_${matId}`;
+    if (!currentHeaders.includes(dispatchHeader)) {
+      headersToAppend.push(dispatchHeader);
+    }
+  }
+
+  // If there are new headers, append them to the header row
+  if (headersToAppend.length > 0) {
+    const startCol = sheet.getLastColumn() + 1;
+    sheet.getRange(1, startCol, 1, headersToAppend.length).setValues([headersToAppend]);
+    Logger.log(`Appended ${headersToAppend.length} material headers to Sales sheet.`);
   }
 }
 
@@ -174,7 +217,7 @@ function addSalesOrder(salesData) {
   
   try {
     const salesSheet = getSheetByName(SALES_SHEET_NAME);
-    ensureMaterialHeadersExist(salesSheet, SALES_COL_FIRST_MATERIAL);
+    ensureSalesMaterialHeadersExist(salesSheet, SALES_COL_FIRST_MATERIAL);
 
     // --- 1. Internal Sale ID Generation (Using Counters Sheet) ---
     const countersSheet = getSheetByName(COUNTERS_SHEET_NAME);
@@ -243,12 +286,18 @@ function addSalesOrder(salesData) {
     newRow[SALES_COL_INV_LINK] = invLink;
     newRow[SALES_COL_EWAY_LINK] = ewayLink;
 
-    // --- 4. Material Quantities ---
-    finalHeaders.forEach((matId, index) => {
-      const quantity = salesData.materials[matId] || 0;
-      if (quantity > 0) {
-        newRow[SALES_COL_FIRST_MATERIAL + index] = quantity;
+    // --- 4. PO Material Quantities ---
+    // Headers format: [Fixed cols...] [PO_Mat1, PO_Mat2...] [Dispatch_Mat1, Dispatch_Mat2...]
+    finalHeaders.forEach((header, index) => {
+      const headerStr = header.toString().trim();
+      if (headerStr.startsWith('PO_')) {
+        const matId = headerStr.substring(3); // Remove 'PO_' prefix
+        const quantity = salesData.materials[matId] || 0;
+        if (quantity > 0) {
+          newRow[SALES_COL_FIRST_MATERIAL + index] = quantity;
+        }
       }
+      // Note: Dispatch quantities are not set during initial add, only during updates
     });
 
     salesSheet.appendRow(newRow);
@@ -259,7 +308,6 @@ function addSalesOrder(salesData) {
     return { error: true, message: "Server error during Sales Order submission: " + e.toString() };
   }
 }
-
 /**
  * Updates an existing Sales Order in the Sales sheet.
  * Only Appointment Date and Invoice Number can be updated.
@@ -377,6 +425,23 @@ function updateSalesOrder(updateData) {
       if (newEwayLink !== null) {
         salesSheet.getRange(rowNumberInSheet, SALES_COL_EWAY_LINK + 1).setValue(newEwayLink);
       }
+    }
+
+    // --- Update Dispatch Material Quantities ---
+    if (updateData.dispatchMaterials && Object.keys(updateData.dispatchMaterials).length > 0) {
+      ensureSalesMaterialHeadersExist(salesSheet, SALES_COL_FIRST_MATERIAL);
+      
+      const finalHeaders = salesSheet.getRange(1, SALES_COL_FIRST_MATERIAL + 1, 1, salesSheet.getLastColumn() - SALES_COL_FIRST_MATERIAL).getValues()[0].map(h => h.toString().trim());
+      
+      // Update dispatch quantities
+      finalHeaders.forEach((header, index) => {
+        const headerStr = header.toString().trim();
+        if (headerStr.startsWith('Dispatch_')) {
+          const matId = headerStr.substring(9); // Remove 'Dispatch_' prefix
+          const quantity = updateData.dispatchMaterials[matId] || 0;
+          salesSheet.getRange(rowNumberInSheet, SALES_COL_FIRST_MATERIAL + index + 1).setValue(quantity);
+        }
+      });
     }
 
     return { success: true, message: `Sales Order ${internalId} updated successfully.` };
@@ -533,21 +598,31 @@ function getSalesData() {
         
 
         let displayItemDetails = []; // For modal display (string array)
-        let rawItemDetails = {};     // For edit form population (map of matId: quantity)
+        let rawItemDetails = {};     // For edit form population - PO quantities (map of matId: quantity)
+        let rawDispatchDetails = {}; // For edit form population - Dispatch quantities (map of matId: quantity)
 
         // Iterate through the quantity columns
+        // Headers format: [Fixed cols...] [PO_Mat1, PO_Mat2...] [Dispatch_Mat1, Dispatch_Mat2...]
         for (let i = 0; i < matIdHeaders.length; i++) {
-            const matId = matIdHeaders[i].toString().trim();
+            const header = matIdHeaders[i].toString().trim();
             
             // Calculate quantity column index using constant
             const quantity = row[i + SALES_COL_FIRST_MATERIAL]; 
             const numericQuantity = typeof quantity === 'number' ? quantity : (parseInt(quantity) || 0);
 
-            if (numericQuantity > 0) {
-                const productName = productMap.get(matId) || `Unknown Product (ID: ${matId})`;
-                // Format: "Material Name: Quantity" separated by newlines (\n)
-                displayItemDetails.push(`${productName}: ${numericQuantity}`);
-                rawItemDetails[matId] = numericQuantity;
+            if (header.startsWith('PO_')) {
+                const matId = header.substring(3); // Remove 'PO_' prefix
+                if (numericQuantity > 0) {
+                    const productName = productMap.get(matId) || `Unknown Product (ID: ${matId})`;
+                    // Format: "Material Name: Quantity" separated by newlines (\n)
+                    displayItemDetails.push(`${productName}: ${numericQuantity}`);
+                    rawItemDetails[matId] = numericQuantity;
+                }
+            } else if (header.startsWith('Dispatch_')) {
+                const matId = header.substring(9); // Remove 'Dispatch_' prefix
+                if (numericQuantity > 0) {
+                    rawDispatchDetails[matId] = numericQuantity;
+                }
             }
         }
 
@@ -569,7 +644,8 @@ function getSalesData() {
             invLink: row[SALES_COL_INV_LINK] || '',      // NEW: Invoice document URL
             ewayLink: row[SALES_COL_EWAY_LINK] || '',    // NEW: EWay document URL
             displayItemDetails: displayItemDetails.join('\n'), // For modal button click
-            rawItemDetails: rawItemDetails // For edit form population
+            rawItemDetails: rawItemDetails, // For edit form population - PO quantities
+            rawDispatchDetails: rawDispatchDetails // For edit form population - Dispatch quantities
         });
     }
 

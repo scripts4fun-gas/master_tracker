@@ -356,13 +356,13 @@
 
             <!-- Material Selection Table -->
             <div class="flex justify-between items-center mb-4">
-                <h3 class="text-xl font-semibold text-gray-700">Material Quantities <span class="text-red-500">*</span></h3>
+                <h3 class="text-xl font-semibold text-gray-700">PO Material Quantities <span class="text-red-500">*</span></h3>
                 <div class="text-lg font-semibold text-indigo-600">Total: <span id="sales-total-qty">0</span></div>
             </div>
             
             <input type="text" id="material-search-sales" onkeyup="filterMaterials('sales')" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 mb-4" placeholder="Search material by name or ID...">
 
-            <div class="overflow-y-auto max-h-72 border border-gray-200 rounded-lg">
+            <div class="overflow-y-auto max-h-72 border border-gray-200 rounded-lg mb-6">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50 sticky top-0">
                         <tr>
@@ -376,6 +376,39 @@
                         <tr><td colspan="3" class="px-6 py-4 text-center text-gray-500">Loading materials...</td></tr>
                     </tbody>
                 </table>
+            </div>
+
+            <!-- Dispatch Goods Section (Only shown during Edit) -->
+            <div id="dispatch-goods-section" class="hidden">
+                <div class="mb-4">
+                    <label class="inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="copy-po-quantity-checkbox" class="form-checkbox h-5 w-5 text-indigo-600" onchange="copyPOQuantityToDispatch()">
+                        <span class="ml-2 text-sm font-medium text-gray-700">Copy PO Quantity to Dispatch</span>
+                    </label>
+                </div>
+
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-semibold text-gray-700">Dispatch Goods Quantities</h3>
+                    <div class="text-lg font-semibold text-green-600">Total: <span id="sales-dispatch-total-qty">0</span></div>
+                </div>
+                
+                <input type="text" id="material-search-sales-dispatch" onkeyup="filterMaterials('sales-dispatch')" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 mb-4" placeholder="Search material by name or ID...">
+
+                <div class="overflow-y-auto max-h-72 border border-gray-200 rounded-lg mb-6">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-green-50 sticky top-0">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">ID</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-2/4">Material Name</th>
+                                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">Quantity</th>
+                            </tr>
+                        </thead>
+                        <tbody id="material-list-body-sales-dispatch" class="bg-white divide-y divide-gray-100">
+                            <!-- Dispatch materials loaded here -->
+                            <tr><td colspan="3" class="px-6 py-4 text-center text-gray-500">Loading materials...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
             <div id="sales-po-message-area" class="mt-4 p-3 rounded-lg text-sm text-center hidden"></div>
@@ -987,8 +1020,18 @@
    * @param {object} initialQuantities Map of materialId to quantity (only used in 'sales' edit mode)
    */
   function renderMaterials(materials, type, initialQuantities = {}) {
-    const targetBody = type === 'po' ? materialListBodyPO : (type === 'manual' ? materialListBodyManual : materialListBodySales);
-    const isEditMode = type === 'sales' && currentEditingInternalId !== null;
+    let targetBody;
+    if (type === 'po') {
+      targetBody = materialListBodyPO;
+    } else if (type === 'manual') {
+      targetBody = materialListBodyManual;
+    } else if (type === 'sales-dispatch') {
+      targetBody = document.getElementById('material-list-body-sales-dispatch');
+    } else {
+      targetBody = materialListBodySales;
+    }
+    
+    const isEditMode = (type === 'sales' || type === 'sales-dispatch') && currentEditingInternalId !== null;
 
     targetBody.innerHTML = '';
     
@@ -1011,23 +1054,24 @@
       row.className = 'hover:bg-gray-50 material-row';
       
       const quantityInputId = `qty-${type}-${mat.id}`;
-      const inputDisabledClass = isEditMode ? 'disabled-input' : '';
-      const inputDisabledAttr = isEditMode ? 'disabled' : '';
-      const buttonDisabledAttr = isEditMode ? 'disabled' : '';
+      // Dispatch fields are always editable in edit mode, PO fields are disabled
+      const inputDisabledClass = (isEditMode && type === 'sales') ? 'disabled-input' : '';
+      const inputDisabledAttr = (isEditMode && type === 'sales') ? 'disabled' : '';
+      const buttonDisabledAttr = (isEditMode && type === 'sales') ? 'disabled' : '';
 
       row.innerHTML = `
         <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-500">${mat.id}</td>
         <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900">${mat.name}</td>
         <td class="px-6 py-2 text-center">
             <div class="flex items-center justify-center space-x-1">
-                <button type="button" class="qty-btn px-2 py-1 bg-gray-200 rounded-lg text-gray-700 font-bold text-base ${isEditMode ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-300'}" 
+                <button type="button" class="qty-btn px-2 py-1 bg-gray-200 rounded-lg text-gray-700 font-bold text-base ${(isEditMode && type === 'sales') ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-300'}" 
                         onclick="updateQuantity('${mat.id}', -1, '${type}')" ${buttonDisabledAttr}>-</button>
                 <input type="number" id="${quantityInputId}" 
                        data-material-id="${mat.id}"
                        data-form-type="${type}"
                        class="w-16 p-1 text-center border border-gray-300 rounded-lg text-sm ${inputDisabledClass}" 
                        value="${quantity}" min="0" onchange="validateQuantityInput(this)" oninput="updateFormTotal('${type}')" ${inputDisabledAttr}>
-                <button type="button" class="qty-btn px-2 py-1 bg-gray-200 rounded-lg text-gray-700 font-bold text-base ${isEditMode ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-300'}" 
+                <button type="button" class="qty-btn px-2 py-1 bg-gray-200 rounded-lg text-gray-700 font-bold text-base ${(isEditMode && type === 'sales') ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-300'}" 
                         onclick="updateQuantity('${mat.id}', 1, '${type}')" ${buttonDisabledAttr}>+</button>
             </div>
         </td>
@@ -1046,13 +1090,24 @@
 
   /**
    * Updates the total quantity displayed in the form header
-   * @param {string} type 'po', 'manual' or 'sales'
+   * @param {string} type 'po', 'manual', 'sales', or 'sales-dispatch'
    */
   function updateFormTotal(type) {
-    const selector = type === 'po' ? '#material-list-body-po' : 
-                     (type === 'manual' ? '#material-list-body-manual' : '#material-list-body-sales');
-    const totalElementId = type === 'po' ? 'po-total-qty' : 
-                           (type === 'manual' ? 'manual-total-qty' : 'sales-total-qty');
+    let selector, totalElementId;
+    
+    if (type === 'po') {
+      selector = '#material-list-body-po';
+      totalElementId = 'po-total-qty';
+    } else if (type === 'manual') {
+      selector = '#material-list-body-manual';
+      totalElementId = 'manual-total-qty';
+    } else if (type === 'sales-dispatch') {
+      selector = '#material-list-body-sales-dispatch';
+      totalElementId = 'sales-dispatch-total-qty';
+    } else {
+      selector = '#material-list-body-sales';
+      totalElementId = 'sales-total-qty';
+    }
     
     let total = 0;
     document.querySelectorAll(`${selector} input[type="number"]`).forEach(input => {
@@ -1083,15 +1138,29 @@
 
   /**
    * Filters the material table based on search input.
-   * @param {string} type 'po', 'manual' or 'sales'
+   * @param {string} type 'po', 'manual', 'sales', or 'sales-dispatch'
    */
   function filterMaterials(type) {
-      // NOTE: Filtering is disabled in Sales Edit Mode as only relevant items are shown.
+      // NOTE: Filtering is disabled in Sales Edit Mode for PO table as only relevant items are shown.
       if (type === 'sales' && currentEditingInternalId !== null) return;
       
-      const searchInput = (type === 'po' ? materialSearchInputPO : (type === 'manual' ? materialSearchInputManual : materialSearchInputSales));
+      let searchInput, selector;
+      if (type === 'po') {
+        searchInput = materialSearchInputPO;
+        selector = '#material-list-body-po .material-row';
+      } else if (type === 'manual') {
+        searchInput = materialSearchInputManual;
+        selector = '#material-list-body-manual .material-row';
+      } else if (type === 'sales-dispatch') {
+        searchInput = document.getElementById('material-search-sales-dispatch');
+        selector = '#material-list-body-sales-dispatch .material-row';
+      } else {
+        searchInput = materialSearchInputSales;
+        selector = '#material-list-body-sales .material-row';
+      }
+      
       const filter = searchInput.value.toLowerCase().trim();
-      const rows = document.querySelectorAll(type === 'po' ? '#material-list-body-po .material-row' : (type === 'manual' ? '#material-list-body-manual .material-row' : '#material-list-body-sales .material-row'));
+      const rows = document.querySelectorAll(selector);
       
       rows.forEach(row => {
           const id = row.getAttribute('data-material-id').toLowerCase();
@@ -1106,7 +1175,7 @@
   }
 
   function updateQuantity(matId, delta, type) {
-      // Prevent modification if in Sales Edit Mode
+      // Prevent modification if in Sales Edit Mode for PO table only
       if (type === 'sales' && currentEditingInternalId !== null) return;
       
       const input = document.getElementById(`qty-${type}-${matId}`);
@@ -1129,6 +1198,32 @@
       } else {
           input.value = value;
       }
+  }
+
+  /**
+   * Copies PO quantities to dispatch quantities when checkbox is checked
+   */
+  function copyPOQuantityToDispatch() {
+    const checkbox = document.getElementById('copy-po-quantity-checkbox');
+    if (!checkbox.checked) return;
+    
+    // Get all PO quantity inputs
+    document.querySelectorAll('#material-list-body-sales input[type="number"]').forEach(poInput => {
+      const matId = poInput.getAttribute('data-material-id');
+      const poQty = parseInt(poInput.value) || 0;
+      
+      // Find corresponding dispatch input
+      const dispatchInput = document.getElementById(`qty-sales-dispatch-${matId}`);
+      if (dispatchInput && poQty > 0) {
+        dispatchInput.value = poQty;
+      }
+    });
+    
+    // Update dispatch total
+    updateFormTotal('sales-dispatch');
+    
+    // Uncheck the checkbox after copying
+    checkbox.checked = false;
   }
 
   // --- PURCHASE ORDER FORM LOGIC (PO) ---
@@ -1398,6 +1493,19 @@
           renderMaterials(materials, 'sales', initialQuantities);
           console.log('renderMaterials finished, calling filterMaterials(\'sales\')');
           filterMaterials('sales');
+          
+          // If editing, also render dispatch materials
+          if (isEdit) {
+            const initialDispatchQuantities = poData.rawDispatchDetails || {};
+            console.log('initialDispatchQuantities for renderMaterials:', initialDispatchQuantities);
+            renderMaterials(materials, 'sales-dispatch', initialDispatchQuantities);
+            filterMaterials('sales-dispatch');
+            // Show dispatch goods section
+            document.getElementById('dispatch-goods-section').classList.remove('hidden');
+          } else {
+            // Hide dispatch goods section in add mode
+            document.getElementById('dispatch-goods-section').classList.add('hidden');
+          }
         } catch (cbErr) {
           console.error('Error inside loadMaterials callback', cbErr);
         }
@@ -1573,7 +1681,20 @@
     let successMessage;
 
     if (currentEditingInternalId) {
-        // UPDATE MODE
+        // UPDATE MODE - Collect dispatch quantities
+        const dispatchQuantities = {};
+        let totalDispatchItems = 0;
+        
+        document.querySelectorAll('#material-list-body-sales-dispatch input[type="number"]').forEach(input => {
+            const matId = input.getAttribute('data-material-id');
+            const qty = parseInt(input.value) || 0;
+
+            if (qty > 0) {
+                dispatchQuantities[matId] = qty;
+                totalDispatchItems += qty;
+            }
+        });
+        
         callFunction = 'updateSalesOrder';
         payload = {
             internalId: currentEditingInternalId,
@@ -1583,11 +1704,12 @@
             amount: amount,
             gst: gst,
             total: total,
-            poDate: poDateStr
+            poDate: poDateStr,
+            dispatchMaterials: dispatchQuantities
         };
         successMessage = `Sales Order ${currentEditingInternalId} updated successfully.`;
     } else {
-        // ADD MODE (Need material quantities)
+        // ADD MODE (Need PO material quantities)
         
         const materialQuantities = {};
         let totalItems = 0;
