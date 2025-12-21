@@ -285,6 +285,7 @@ function addSalesOrder(salesData) {
     newRow[SALES_COL_PO_LINK] = poLink;
     newRow[SALES_COL_INV_LINK] = invLink;
     newRow[SALES_COL_EWAY_LINK] = ewayLink;
+    newRow[SALES_COL_COMMENTS] = salesData.comments || '';
 
     // --- 4. PO Material Quantities ---
     // Headers format: [Fixed cols...] [PO_Mat1, PO_Mat2...] [Dispatch_Mat1, Dispatch_Mat2...]
@@ -382,6 +383,11 @@ function updateSalesOrder(updateData) {
     if (typeof updateData.deliveryId !== 'undefined' && updateData.deliveryId !== null) {
       const newDeliveryId = updateData.deliveryId || '';
       salesSheet.getRange(rowNumberInSheet, SALES_COL_DELIVERY_ID + 1).setValue(newDeliveryId);
+    }
+
+    // Comments (optional)
+    if (typeof updateData.comments !== 'undefined' && updateData.comments !== null) {
+      salesSheet.getRange(rowNumberInSheet, SALES_COL_COMMENTS + 1).setValue(updateData.comments);
     }
 
     // Handle file uploads (PO, Invoice, EWay) if provided in updateData.filesMeta
@@ -643,6 +649,7 @@ function getSalesData() {
             poLink: row[SALES_COL_PO_LINK] || '',        // NEW: PO document URL
             invLink: row[SALES_COL_INV_LINK] || '',      // NEW: Invoice document URL
             ewayLink: row[SALES_COL_EWAY_LINK] || '',    // NEW: EWay document URL
+            comments: row[SALES_COL_COMMENTS] || '',     // NEW: Comments
             displayItemDetails: displayItemDetails.join('\n'), // For modal button click
             rawItemDetails: rawItemDetails, // For edit form population - PO quantities
             rawDispatchDetails: rawDispatchDetails // For edit form population - Dispatch quantities

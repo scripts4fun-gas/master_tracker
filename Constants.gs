@@ -20,7 +20,7 @@ const PO_COL_EWAY_LINK = 8;       // EWay Link (Column I)
 const PO_COL_FIRST_MATERIAL = 9;  // Start of material quantities (Column J onwards)
 
 // --- SALES ORDER COLUMN INDICES (0-based) ---
-// Internal ID, PO Number, Date of PO, Appointment Date, Invoice, VendorId, DeliveryId, Amount, GST, Total, PO Link, Invoice Link, EWay Link, PO Materials..., Dispatch Materials...
+// Internal ID, PO Number, Date of PO, Appointment Date, Invoice, VendorId, DeliveryId, Amount, GST, Total, PO Link, Invoice Link, EWay Link, Comments, PO Materials..., Dispatch Materials...
 const SALES_COL_INTERNAL_ID = 0;      // Column A
 const SALES_COL_PO_NUMBER = 1;        // Column B
 const SALES_COL_DATE_PO = 2;          // Column C: Date of PO
@@ -34,7 +34,8 @@ const SALES_COL_TOTAL = 9;            // Column J: Total (NEW)
 const SALES_COL_PO_LINK = 10;         // Column K: PO Link (shifted)
 const SALES_COL_INV_LINK = 11;        // Column L: Invoice Link (shifted)
 const SALES_COL_EWAY_LINK = 12;       // Column M: EWay Link (shifted)
-const SALES_COL_FIRST_MATERIAL = 13;  // Column N: Start of PO material quantities (shifted)
+const SALES_COL_COMMENTS = 13;        // Column N: Comments (NEW)
+const SALES_COL_FIRST_MATERIAL = 14;  // Column O: Start of PO material quantities (shifted)
 // Note: Dispatch material quantities follow after all PO materials. The offset is calculated dynamically based on material count.
 
 // --- GOOGLE DRIVE PARENT FOLDER ID ---

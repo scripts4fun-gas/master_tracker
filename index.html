@@ -354,6 +354,12 @@
                 </div>
             </div>
 
+            <!-- Comments Field -->
+            <div class="mb-6">
+                <label for="sales-comments" class="block text-sm font-medium text-gray-700 mb-1">Comments</label>
+                <textarea id="sales-comments" rows="3" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="Enter any comments or notes about this order..."></textarea>
+            </div>
+
             <!-- Material Selection Table -->
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-xl font-semibold text-gray-700">PO Material Quantities <span class="text-red-500">*</span></h3>
@@ -381,10 +387,9 @@
             <!-- Dispatch Goods Section (Only shown during Edit) -->
             <div id="dispatch-goods-section" class="hidden">
                 <div class="mb-4">
-                    <label class="inline-flex items-center cursor-pointer">
-                        <input type="checkbox" id="copy-po-quantity-checkbox" class="form-checkbox h-5 w-5 text-indigo-600" onchange="copyPOQuantityToDispatch()">
-                        <span class="ml-2 text-sm font-medium text-gray-700">Copy PO Quantity to Dispatch</span>
-                    </label>
+                    <button type="button" onclick="copyPOQuantityToDispatch()" class="px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-green-500 focus:ring-opacity-50">
+                        Copy PO Quantity to Dispatch
+                    </button>
                 </div>
 
                 <div class="flex justify-between items-center mb-4">
@@ -1201,29 +1206,28 @@
   }
 
   /**
-   * Copies PO quantities to dispatch quantities when checkbox is checked
+   * Copies PO quantities to dispatch quantities when button is clicked
    */
   function copyPOQuantityToDispatch() {
-    const checkbox = document.getElementById('copy-po-quantity-checkbox');
-    if (!checkbox.checked) return;
+    console.log('copyPOQuantityToDispatch called');
     
-    // Get all PO quantity inputs
+    // Collect PO quantities from the PO table
+    const poQuantities = {};
     document.querySelectorAll('#material-list-body-sales input[type="number"]').forEach(poInput => {
       const matId = poInput.getAttribute('data-material-id');
       const poQty = parseInt(poInput.value) || 0;
-      
-      // Find corresponding dispatch input
-      const dispatchInput = document.getElementById(`qty-sales-dispatch-${matId}`);
-      if (dispatchInput && poQty > 0) {
-        dispatchInput.value = poQty;
-      }
+      poQuantities[matId] = poQty;
+      console.log(`Collected PO quantity for ${matId}: ${poQty}`);
     });
+    
+    // Re-render the dispatch table with the PO quantities
+    console.log('Re-rendering dispatch table with PO quantities');
+    renderMaterials(allMaterials, 'sales-dispatch', poQuantities);
     
     // Update dispatch total
     updateFormTotal('sales-dispatch');
     
-    // Uncheck the checkbox after copying
-    checkbox.checked = false;
+    console.log(`Copied ${Object.keys(poQuantities).length} quantities to dispatch table`);
   }
 
   // --- PURCHASE ORDER FORM LOGIC (PO) ---
@@ -1537,6 +1541,9 @@
         document.getElementById('sales-gst').value = poData.gst || '';
         document.getElementById('sales-total').value = poData.total || '';
 
+        // Populate comments field
+        document.getElementById('sales-comments').value = poData.comments || '';
+
         // Hide search bar when editing
         console.log('Hiding material search input for edit mode');
         materialSearchInputSales.classList.add('hidden');
@@ -1681,19 +1688,40 @@
     let successMessage;
 
     if (currentEditingInternalId) {
-        // UPDATE MODE - Collect dispatch quantities
+        // UPDATE MODE - Collect dispatch quantities and validate against PO quantities
         const dispatchQuantities = {};
+        const poQuantities = {};
         let totalDispatchItems = 0;
+        let validationErrors = [];
         
-        document.querySelectorAll('#material-list-body-sales-dispatch input[type="number"]').forEach(input => {
+        // First, collect PO quantities
+        document.querySelectorAll('#material-list-body-sales input[type="number"]').forEach(input => {
             const matId = input.getAttribute('data-material-id');
             const qty = parseInt(input.value) || 0;
+            poQuantities[matId] = qty;
+        });
+        
+        // Then collect dispatch quantities and validate
+        document.querySelectorAll('#material-list-body-sales-dispatch input[type="number"]').forEach(input => {
+            const matId = input.getAttribute('data-material-id');
+            const dispatchQty = parseInt(input.value) || 0;
+            const poQty = poQuantities[matId] || 0;
 
-            if (qty > 0) {
-                dispatchQuantities[matId] = qty;
-                totalDispatchItems += qty;
+            if (dispatchQty > 0) {
+                // Validate: dispatch quantity cannot exceed PO quantity
+                if (dispatchQty > poQty) {
+                    validationErrors.push(`Material ${matId}: Dispatch quantity (${dispatchQty}) exceeds PO quantity (${poQty})`);
+                }
+                dispatchQuantities[matId] = dispatchQty;
+                totalDispatchItems += dispatchQty;
             }
         });
+        
+        // Show validation errors if any
+        if (validationErrors.length > 0) {
+            showMessage("Validation Error: " + validationErrors.join('; '), false, salesPOMessageArea);
+            return;
+        }
         
         callFunction = 'updateSalesOrder';
         payload = {
@@ -1743,13 +1771,15 @@
         successMessage = `New Sales Order ${customerPoId} submitted successfully.`;
     }
     
-    // Collect delivery and file data
+    // Collect delivery, comments, and file data
     const deliveryId = salesDeliveryIdInput ? salesDeliveryIdInput.value : '';
+    const comments = document.getElementById('sales-comments').value.trim();
     const filesMeta = await getFilesMeta(); // implement getFilesMeta to read and encode files
 
-    // Add vendor, delivery and files to payload
+    // Add vendor, delivery, comments and files to payload
     payload.vendorId = vendorId;
     payload.deliveryId = deliveryId;
+    payload.comments = comments;
     payload.filesMeta = filesMeta;
 
     // Show submitting message immediately
