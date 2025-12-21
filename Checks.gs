@@ -136,6 +136,42 @@ function salesSanityCheck() {
       // Check EWay Document
       if (!ewayLink) missingFields.push('EWay Document');
 
+      // Check dispatch quantities vs PO quantities
+      const salesHeaders = salesData[0];
+      const matIdHeaders = salesHeaders.slice(SALES_COL_FIRST_MATERIAL);
+      const totalMatCols = matIdHeaders.length;
+      const halfPoint = Math.floor(totalMatCols / 2);
+      
+      let totalDispatchQty = 0;
+      let dispatchIssues = [];
+      
+      // First half: PO quantities, Second half: Dispatch quantities
+      for (let j = 0; j < halfPoint; j++) {
+        const poQty = row[SALES_COL_FIRST_MATERIAL + j];
+        const dispatchQty = row[SALES_COL_FIRST_MATERIAL + halfPoint + j];
+        
+        const numericPoQty = typeof poQty === 'number' ? poQty : (parseInt(poQty) || 0);
+        const numericDispatchQty = typeof dispatchQty === 'number' ? dispatchQty : (parseInt(dispatchQty) || 0);
+        
+        totalDispatchQty += numericDispatchQty;
+        
+        // Check if dispatch quantity exceeds PO quantity for this material
+        if (numericDispatchQty > numericPoQty && numericPoQty > 0) {
+          const matId = matIdHeaders[j] ? matIdHeaders[j].toString().trim() : `Material ${j + 1}`;
+          dispatchIssues.push(`${matId}: Dispatch(${numericDispatchQty}) > PO(${numericPoQty})`);
+        }
+      }
+      
+      // Check if total dispatch quantity is 0 (user hasn't entered dispatch quantities)
+      if (totalDispatchQty === 0) {
+        missingFields.push('Dispatch Quantities (all zero)');
+      }
+      
+      // Add dispatch validation issues to missing fields
+      if (dispatchIssues.length > 0) {
+        missingFields.push('Dispatch > PO: ' + dispatchIssues.join(', '));
+      }
+
       // If any fields are missing, add to issues list
       if (missingFields.length > 0) {
         issues.push({
