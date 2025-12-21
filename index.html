@@ -321,19 +321,19 @@
 
                 <!-- Amount (NEW) -->
                 <div>
-                    <label for="sales-amount" class="block text-sm font-medium text-gray-700 mb-1">Amount <span class="text-red-500">*</span></label>
+                    <label for="sales-amount" class="block text-sm font-medium text-gray-700 mb-1">Invoice Amount <span class="text-red-500">*</span></label>
                     <input type="number" id="sales-amount" step="0.01" min="0" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="0.00" oninput="calculateSalesTotal()">
                 </div>
 
                 <!-- GST (NEW) -->
                 <div>
-                    <label for="sales-gst" class="block text-sm font-medium text-gray-700 mb-1">GST <span class="text-red-500">*</span></label>
+                    <label for="sales-gst" class="block text-sm font-medium text-gray-700 mb-1">Invoice GST <span class="text-red-500">*</span></label>
                     <input type="number" id="sales-gst" step="0.01" min="0" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="0.00" oninput="calculateSalesTotal()">
                 </div>
 
                 <!-- Total (Computed - Read Only) -->
                 <div>
-                    <label for="sales-total" class="block text-sm font-medium text-gray-700 mb-1">Total</label>
+                    <label for="sales-total" class="block text-sm font-medium text-gray-700 mb-1">Total Invoice</label>
                     <input type="text" id="sales-total" readonly class="w-full p-3 border border-gray-300 rounded-lg bg-gray-100 text-gray-700 font-semibold cursor-not-allowed" placeholder="0.00">
                 </div>
             </div>
@@ -1537,7 +1537,7 @@
         showMessage("Validation Error: Amount is mandatory and must be greater than 0.", false, salesPOMessageArea);
         return;
     }
-    if (gst < 0) {
+    if (gst <= 0) {
         showMessage("Validation Error: GST is mandatory and cannot be less than 0.", false, salesPOMessageArea);
         return;
     }

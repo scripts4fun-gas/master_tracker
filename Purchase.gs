@@ -137,11 +137,41 @@ function addPurchaseOrder(poData) {
 }
 
 /**
+ * Checks if a customer PO number already exists in the Sales sheet.
+ * @param {string} customerPoNumber The customer PO number to check.
+ * @returns {boolean} True if the PO number already exists, false otherwise.
+ */
+function isDuplicateSalesPO(customerPoNumber) {
+  try {
+    const salesSheet = getSheetByName(SALES_SHEET_NAME);
+    const salesData = salesSheet.getDataRange().getValues();
+    
+    // Skip header row and check all PO numbers
+    for (let i = 1; i < salesData.length; i++) {
+      const existingPO = salesData[i][SALES_COL_PO_NUMBER];
+      if (existingPO && existingPO.toString().trim() === customerPoNumber.toString().trim()) {
+        return true;
+      }
+    }
+    
+    return false;
+  } catch (e) {
+    Logger.log("Error in isDuplicateSalesPO: " + e.toString());
+    return false; // If error, allow submission (fail open)
+  }
+}
+
+/**
  * Validates and inserts a new Sales Order into the Sales sheet.
  * @param {object} salesData The sales order data from the form.
  * @returns {object} An object containing success status and a message.
  */
 function addSalesOrder(salesData) {
+  // Check for duplicate PO number
+  if (isDuplicateSalesPO(salesData.customerPoId)) {
+    return { error: true, message: `Customer PO Number "${salesData.customerPoId}" already exists. Please use a unique PO number.` };
+  }
+  
   try {
     const salesSheet = getSheetByName(SALES_SHEET_NAME);
     ensureMaterialHeadersExist(salesSheet, SALES_COL_FIRST_MATERIAL);
