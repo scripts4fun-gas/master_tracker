@@ -51,23 +51,39 @@ function ensureSalesMaterialHeadersExist(sheet, materialStartIndex) {
 
   const currentHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   
-  // We need: [Fixed Cols...] [PO_Mat1, PO_Mat2...] [Dispatch_Mat1, Dispatch_Mat2...]
-  // Check if we have both PO and Dispatch headers
+  // We need: [Fixed Cols...] [Mat1, Mat2, Mat3...] [Mat1, Mat2, Mat3...]
+  // First set = PO quantities, Second set = Dispatch quantities
+  // Expected structure: materialStartIndex marks where first set begins
+  // Current material headers start from materialStartIndex
+  const currentMaterialHeaders = currentHeaders.slice(materialStartIndex);
+  
+  // Determine how many material columns we currently have
+  const expectedTotalMaterialCols = materialIds.length * 2; // PO set + Dispatch set
+  const missingCols = expectedTotalMaterialCols - currentMaterialHeaders.length;
+  
+  if (missingCols <= 0) return; // Already have all columns
+  
   let headersToAppend = [];
   
-  // First, check PO headers (starting at materialStartIndex)
-  for (const matId of materialIds) {
-    const poHeader = `PO_${matId}`;
-    if (!currentHeaders.includes(poHeader)) {
-      headersToAppend.push(poHeader);
+  // If we have fewer than materialIds.length columns, we need to add PO columns first
+  if (currentMaterialHeaders.length < materialIds.length) {
+    // Add missing PO columns
+    const existingPoHeaders = new Set(currentMaterialHeaders.slice(0, Math.min(currentMaterialHeaders.length, materialIds.length)).map(h => h.toString().trim()));
+    for (const matId of materialIds) {
+      if (!existingPoHeaders.has(matId)) {
+        headersToAppend.push(matId);
+      }
     }
   }
   
-  // Then, check Dispatch headers
-  for (const matId of materialIds) {
-    const dispatchHeader = `Dispatch_${matId}`;
-    if (!currentHeaders.includes(dispatchHeader)) {
-      headersToAppend.push(dispatchHeader);
+  // Then add Dispatch columns (second set of same material IDs)
+  if (currentMaterialHeaders.length < expectedTotalMaterialCols) {
+    const existingDispatchStart = Math.max(materialIds.length, currentMaterialHeaders.length);
+    const existingDispatchHeaders = new Set(currentMaterialHeaders.slice(materialIds.length).map(h => h.toString().trim()));
+    for (const matId of materialIds) {
+      if (!existingDispatchHeaders.has(matId)) {
+        headersToAppend.push(matId);
+      }
     }
   }
 
@@ -288,18 +304,33 @@ function addSalesOrder(salesData) {
     newRow[SALES_COL_COMMENTS] = salesData.comments || '';
 
     // --- 4. PO Material Quantities ---
-    // Headers format: [Fixed cols...] [PO_Mat1, PO_Mat2...] [Dispatch_Mat1, Dispatch_Mat2...]
-    finalHeaders.forEach((header, index) => {
-      const headerStr = header.toString().trim();
-      if (headerStr.startsWith('PO_')) {
-        const matId = headerStr.substring(3); // Remove 'PO_' prefix
-        const quantity = salesData.materials[matId] || 0;
-        if (quantity > 0) {
-          newRow[SALES_COL_FIRST_MATERIAL + index] = quantity;
-        }
+    // Headers format: [Fixed cols...] [Mat1, Mat2, Mat3...] [Mat1, Mat2, Mat3...]
+    // First set = PO quantities, Second set = Dispatch quantities
+    const materialCount = Math.floor(finalHeaders.length / 2);
+    const poMatHeaders = finalHeaders.slice(0, materialCount);
+    const dispatchMatHeaders = finalHeaders.slice(materialCount);
+    
+    // Insert PO quantities (first set of material columns)
+    poMatHeaders.forEach((matId, index) => {
+      const headerStr = matId.toString().trim();
+      if (!headerStr) return;
+      const quantity = salesData.materials[headerStr] || 0;
+      if (quantity > 0) {
+        newRow[SALES_COL_FIRST_MATERIAL + index] = quantity;
       }
-      // Note: Dispatch quantities are not set during initial add, only during updates
     });
+    
+    // Insert Dispatch quantities (second set of material columns) if provided
+    if (salesData.dispatchMaterials && Object.keys(salesData.dispatchMaterials).length > 0) {
+      dispatchMatHeaders.forEach((matId, index) => {
+        const headerStr = matId.toString().trim();
+        if (!headerStr) return;
+        const quantity = salesData.dispatchMaterials[headerStr] || 0;
+        if (quantity > 0) {
+          newRow[SALES_COL_FIRST_MATERIAL + materialCount + index] = quantity;
+        }
+      });
+    }
 
     salesSheet.appendRow(newRow);
 
@@ -439,14 +470,17 @@ function updateSalesOrder(updateData) {
       
       const finalHeaders = salesSheet.getRange(1, SALES_COL_FIRST_MATERIAL + 1, 1, salesSheet.getLastColumn() - SALES_COL_FIRST_MATERIAL).getValues()[0].map(h => h.toString().trim());
       
-      // Update dispatch quantities
-      finalHeaders.forEach((header, index) => {
-        const headerStr = header.toString().trim();
-        if (headerStr.startsWith('Dispatch_')) {
-          const matId = headerStr.substring(9); // Remove 'Dispatch_' prefix
-          const quantity = updateData.dispatchMaterials[matId] || 0;
-          salesSheet.getRange(rowNumberInSheet, SALES_COL_FIRST_MATERIAL + index + 1).setValue(quantity);
-        }
+      // Headers format: [Mat1, Mat2, Mat3...] [Mat1, Mat2, Mat3...]
+      // First set = PO quantities, Second set = Dispatch quantities
+      const materialCount = Math.floor(finalHeaders.length / 2);
+      const dispatchMatHeaders = finalHeaders.slice(materialCount);
+      
+      // Update dispatch quantities (second set of material columns)
+      dispatchMatHeaders.forEach((matId, index) => {
+        const headerStr = matId.toString().trim();
+        if (!headerStr) return;
+        const quantity = updateData.dispatchMaterials[headerStr] || 0;
+        salesSheet.getRange(rowNumberInSheet, SALES_COL_FIRST_MATERIAL + materialCount + index + 1).setValue(quantity);
       });
     }
 
@@ -578,8 +612,15 @@ function getSalesData() {
     // Headers: SaleID, Sale PO Number, Date of PO, Appointment Date, Invoice, MatId1, MatId2, ...
     const headers = salesData.shift();
 
-    // MatIds start from the column index defined by SALES_COL_FIRST_MATERIAL
-    const matIdHeaders = headers.slice(SALES_COL_FIRST_MATERIAL);
+    // Material IDs start from SALES_COL_FIRST_MATERIAL
+    // Structure: [Fixed cols...] [Mat1, Mat2, Mat3...] [Mat1, Mat2, Mat3...]
+    // First set = PO quantities, Second set = Dispatch quantities
+    const allMaterialHeaders = headers.slice(SALES_COL_FIRST_MATERIAL);
+    
+    // Determine how many materials we have (half the material columns)
+    const materialCount = Math.floor(allMaterialHeaders.length / 2);
+    const poMatHeaders = allMaterialHeaders.slice(0, materialCount);
+    const dispatchMatHeaders = allMaterialHeaders.slice(materialCount);
 
     const salesPOs = [];
 
@@ -607,27 +648,57 @@ function getSalesData() {
         let rawItemDetails = {};     // For edit form population - PO quantities (map of matId: quantity)
         let rawDispatchDetails = {}; // For edit form population - Dispatch quantities (map of matId: quantity)
 
-        // Iterate through the quantity columns
-        // Headers format: [Fixed cols...] [PO_Mat1, PO_Mat2...] [Dispatch_Mat1, Dispatch_Mat2...]
-        for (let i = 0; i < matIdHeaders.length; i++) {
-            const header = matIdHeaders[i].toString().trim();
+        // Process PO quantities (first set of material columns)
+        for (let i = 0; i < poMatHeaders.length; i++) {
+            const matId = poMatHeaders[i].toString().trim();
+            if (!matId) continue;
             
-            // Calculate quantity column index using constant
-            const quantity = row[i + SALES_COL_FIRST_MATERIAL]; 
+            const quantity = row[SALES_COL_FIRST_MATERIAL + i]; 
             const numericQuantity = typeof quantity === 'number' ? quantity : (parseInt(quantity) || 0);
 
-            if (header.startsWith('PO_')) {
-                const matId = header.substring(3); // Remove 'PO_' prefix
-                if (numericQuantity > 0) {
-                    const productName = productMap.get(matId) || `Unknown Product (ID: ${matId})`;
-                    // Format: "Material Name: Quantity" separated by newlines (\n)
-                    displayItemDetails.push(`${productName}: ${numericQuantity}`);
-                    rawItemDetails[matId] = numericQuantity;
-                }
-            } else if (header.startsWith('Dispatch_')) {
-                const matId = header.substring(9); // Remove 'Dispatch_' prefix
-                if (numericQuantity > 0) {
-                    rawDispatchDetails[matId] = numericQuantity;
+            if (numericQuantity > 0) {
+                const productName = productMap.get(matId) || `Unknown Product (ID: ${matId})`;
+                displayItemDetails.push(`${productName}: ${numericQuantity}`);
+                rawItemDetails[matId] = numericQuantity;
+            }
+        }
+
+        // Process Dispatch quantities (second set of material columns)
+        for (let i = 0; i < dispatchMatHeaders.length; i++) {
+            const matId = dispatchMatHeaders[i].toString().trim();
+            if (!matId) continue;
+            
+            const quantity = row[SALES_COL_FIRST_MATERIAL + materialCount + i]; 
+            const numericQuantity = typeof quantity === 'number' ? quantity : (parseInt(quantity) || 0);
+
+            if (numericQuantity > 0) {
+                rawDispatchDetails[matId] = numericQuantity;
+            }
+        }
+
+        // Check if appointment date is today and validate required fields
+        let validationStatus = 'normal'; // 'normal', 'complete', 'incomplete'
+        if (row[SALES_COL_APPOINTMENT_DATE] instanceof Date) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const appointmentDateOnly = new Date(row[SALES_COL_APPOINTMENT_DATE]);
+            appointmentDateOnly.setHours(0, 0, 0, 0);
+            
+            if (appointmentDateOnly.getTime() === today.getTime()) {
+                // Appointment date is today - check required fields
+                const hasInvoice = invoiceNumber && invoiceNumber.toString().trim() !== '';
+                const hasVendor = vendorId && vendorId !== '';
+                const hasDelivery = row[SALES_COL_DELIVERY_ID] && row[SALES_COL_DELIVERY_ID].toString().trim() !== '';
+                const hasPoLink = row[SALES_COL_PO_LINK] && row[SALES_COL_PO_LINK].toString().trim() !== '';
+                const hasInvLink = row[SALES_COL_INV_LINK] && row[SALES_COL_INV_LINK].toString().trim() !== '';
+                const hasEwayLink = row[SALES_COL_EWAY_LINK] && row[SALES_COL_EWAY_LINK].toString().trim() !== '';
+                const hasDispatchQty = Object.keys(rawDispatchDetails).length > 0;
+                
+                // All required fields present = complete (green), otherwise incomplete (red)
+                if (hasInvoice && hasVendor && hasDelivery && hasPoLink && hasInvLink && hasEwayLink && hasDispatchQty) {
+                    validationStatus = 'complete';
+                } else {
+                    validationStatus = 'incomplete';
                 }
             }
         }
@@ -652,7 +723,8 @@ function getSalesData() {
             comments: row[SALES_COL_COMMENTS] || '',     // NEW: Comments
             displayItemDetails: displayItemDetails.join('\n'), // For modal button click
             rawItemDetails: rawItemDetails, // For edit form population - PO quantities
-            rawDispatchDetails: rawDispatchDetails // For edit form population - Dispatch quantities
+            rawDispatchDetails: rawDispatchDetails, // For edit form population - Dispatch quantities
+            validationStatus: validationStatus // NEW: Validation status for color coding
         });
     }
 

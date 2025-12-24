@@ -810,7 +810,15 @@
 
         filteredData.forEach(po => {
           const row = document.createElement('tr');
-          row.className = 'hover:bg-gray-50';
+          
+          // Apply background color based on validation status
+          if (po.validationStatus === 'complete') {
+            row.className = 'hover:bg-green-100 bg-green-50'; // Light green for complete
+          } else if (po.validationStatus === 'incomplete') {
+            row.className = 'hover:bg-red-100 bg-red-50'; // Light red for incomplete
+          } else {
+            row.className = 'hover:bg-gray-50'; // Normal background
+          }
           
           // Encode the displayItemDetails string for the details modal
           const encodedDetails = encodeURIComponent(po.displayItemDetails);
